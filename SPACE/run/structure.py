@@ -37,17 +37,11 @@ def structure(config):
 
     # Material properties
 
-    rho_aluminum = 2780
-    E_aluminum = 72e9
-    ys_aluminum = 324e6
-    nu_aluminum = 0.33
-    kcorr_aluminum = 5.0/6.0
-
-    rho_titanium = 4460
-    E_titanium = 110e9
-    ys_titanium = 869e6
-    nu_titanium = 0.31
-    kcorr_titanium = 5.0/6.0
+    material_rho = float(konfig.MATERIAL_DENSITY)
+    material_E = float(konfig.MATERIAL_YOUNG_MODULUS)
+    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH)
+    material_nu = float(konfig.MATERIAL_POISSON_RATIO)
+    kcorr = 5.0/6.0
 
     t = 0.01
     tMin = 0.0016 # 0.0016 # 1/16"
@@ -120,9 +114,9 @@ def structure(config):
     #print(len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]))
 
     def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
-        con = constitutive.isoFSDTStiffness(rho_aluminum, E_aluminum, nu_aluminum, kcorr_aluminum, ys_aluminum, t, dvNum, tMin, tMax)
+        con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
         # if userDescript in ['JUNCTIONS','FRAMES','LONGERONS','SPARS']:
-        #     con = constitutive.isoFSDTStiffness(rho_2024, E_2024, nu, kcorr, ys_2024, 0.05, dvNum, 0.0016, 0.05)
+        #     con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, 0.05, dvNum, 0.0016, 0.05)
         scale = [100.0]
         return con, scale
 
@@ -245,6 +239,8 @@ def structure(config):
     # #FEASolver.writeBDF("crm_wing_design_tacs_final.bdf")
 
 
+    postprocess(config)
+
     # info out
     info = spaceio.State(info)
     #info.FILES.MASS = konfig.MASS
@@ -252,3 +248,175 @@ def structure(config):
 
 #: def structure()
 
+def postprocess(config):
+
+    # local copy
+    konfig = copy.deepcopy(config)
+
+
+
+
+    nx = float(konfig.ACCELERATION_X)
+    ny = float(konfig.ACCELERATION_Y)
+    nz = float(konfig.ACCELERATION_Z)
+
+    loadFactor = np.sqrt(nx*nx+ny*ny+nz*nz)
+    gravityVector = -9.81 * np.array([-nx/loadFactor,-nz/loadFactor,-ny/loadFactor]) # Change of Frame: to Structure Frame
+
+    # Read bdf
+
+    coord_bdf = []
+    elem_bdf = []
+    elem_tag_bdf = []
+    descriptions = {}
+    nDv_bdf = 0
+    bdf = open(konfig.STRUCT_SURFACE + '.bdf')
+    for line in bdf:
+        data = line.split()
+        if (line[0]=="$" and len(data) == 3):
+            nDv_bdf += 1
+            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
+        if (line[0]=="G" and len(data) == 6):
+            vec = [float(data[3]), float(data[4].strip('*'))]
+        elif (line[0]=="*" and len(data) == 5):
+            vec.append(float(data[2]))
+            coord_bdf.append(vec)
+        elif (line[0]=="C" and len(data) == 7):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            elem_tag_bdf.append(int(data[2]))
+    bdf.close()
+
+    tag_members = []
+    for desc in descriptions.keys():
+        if desc.split(":")[0] in ['RIB','SPAR','STRING','SKIN','FRAME','LONG']:
+            tag_members.append(descriptions[desc])
+
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    # Read dvs
+
+    dvs_file = 'dvs.dat'
+    dvs = open(dvs_file)
+    x_dvs = np.loadtxt(dvs);
+    dvs.close()
+    print len(x_dvs)
+
+    # Read load
+
+    nDim = 3
+
+    load = open(konfig.LOAD_FILENAME)
+
+    data = load.readline().split()
+    nPoint_load = int(data[0])
+
+    forces = [[0.0 for iDim in range(nDim)] for iPoint_load in range(nPoint_load)]
+    for iPoint_load in range(nPoint_load):
+        data = load.readline().split()
+        forces[iPoint_load][0] = float(data[3])
+        forces[iPoint_load][1] = float(data[4])
+        forces[iPoint_load][2] = float(data[5])
+
+    load.close()
+
+    # Area
+
+    nNode = 4
+
+    normal_elem_bdf = [[0.0 for iDim in range(nDim)] for iElem_bdf in range(nElem_bdf)]
+    area_elem_bdf = [0.0 for iElem_bdf in range(nElem_bdf)]
+    vec_a = [0.0 for iDim in range(nDim)] 
+    vec_b = [0.0 for iDim in range(nDim)]
+
+    center_elem_bdf = [[0.0 for iDim in range(nDim)] for iElem_bdf in range(nElem_bdf)]
+
+    for iElem_bdf in range(nElem_bdf):
+        iPoint_0 = elem_bdf[iElem_bdf][0]-1
+        iPoint_1 = elem_bdf[iElem_bdf][1]-1
+        iPoint_2 = elem_bdf[iElem_bdf][2]-1
+        iPoint_3 = elem_bdf[iElem_bdf][3]-1
+        for iDim in range(nDim):
+            vec_a[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_1][iDim]
+            vec_b[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_1][iDim]
+            center_elem_bdf[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
+        normal_elem_bdf[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+        normal_elem_bdf[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+        normal_elem_bdf[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+        for iDim in range(nDim):
+            vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
+            vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
+        normal_elem_bdf[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+        normal_elem_bdf[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+        normal_elem_bdf[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+        area_elem_bdf[iElem_bdf] += np.sqrt(normal_elem_bdf[iElem_bdf][0]*normal_elem_bdf[iElem_bdf][0] + normal_elem_bdf[iElem_bdf][1]*normal_elem_bdf[iElem_bdf][1] + normal_elem_bdf[iElem_bdf][2]*normal_elem_bdf[iElem_bdf][2])
+
+    # Mass and Center Of Mass
+
+    material_rho = float(konfig.MATERIAL_DENSITY)
+
+    structure_mass = 0.0
+    com = [0.0 for iDim in range(nDim)]
+
+    for iElem_bdf in range(nElem_bdf):
+        elem_thickess = x_dvs[elem_tag_bdf[iElem_bdf]-1]
+        elem_mass = area_elem_bdf[iElem_bdf]*elem_thickess*material_rho
+        structure_mass += elem_mass
+        for iDim in range(nDim):
+            com[iDim] += elem_mass*center_elem_bdf[iElem_bdf][iDim]
+
+    additional_mass = 0.0
+    # for iAdd_mass in range(len(additional_masses)):
+    #   i_mass = additional_masses[iAdd_mass][3]
+    #   additional_mass += i_mass
+    #   for iDim in range(nDim):
+    #     com[iDim] += i_mass*additional_masses[iAdd_mass][iDim]
+
+    for iDim in range(nDim):
+        com[iDim] /= (structure_mass+additional_mass)
+
+    print structure_mass
+    print com
+
+    # Forces
+
+    external_forces = [0.0 for iDim in range(nDim)] 
+    for iPoint_load in range(nPoint_load):
+        for iDim in range(nDim):
+            external_forces[iDim] += forces[iPoint_load][iDim]
+
+    # Moments (Inertial Forces included in external_forces (additional_mass) will cancel out with the structural_mass Inertial Forces)
+
+    pitch_moment = 0.0
+    dist = [0.0 for iDim in range(nDim)]
+
+    for iPoint_load in range(nPoint_load):
+        for iDim in range(nDim):
+            dist[iDim] = coord_bdf[iPoint_load][iDim]-com[iDim]
+        pitch_moment += (forces[iPoint_load][1]*dist[0]-forces[iPoint_load][0]*dist[1])
+
+    pitch_moment_elem = 0.0
+    for iElem_bdf in range(nElem_bdf):                           # Contribution of this is nul if com computed without additional masses (so external forces cancel out by themselves)
+        elem_thickess = x_dvs[elem_tag_bdf[iElem_bdf]-1]         #                      will cancel out Inertial Forces included in external_forces if computed with additional masses
+        elem_mass = area_elem_bdf[iElem_bdf]*elem_thickess*material_rho
+        local_force = elem_mass*gravityVector*loadFactor
+        for iDim in range(nDim):
+            dist[iDim] = center_elem_bdf[iElem_bdf][iDim]-com[iDim]
+        pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
+
+    # Conclusion: its fine to compute the pitch with the cog of the structre only !!!!
+
+    print pitch_moment, pitch_moment_elem
+
+    inertial_forces = structure_mass*gravityVector*loadFactor
+
+    print external_forces+inertial_forces
+
+#: def postprocess()
+
+def isFloat(s):
+    try: 
+        float(s)
+        return True
+    except ValueError:
+        return False
