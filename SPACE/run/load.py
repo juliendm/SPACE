@@ -7,6 +7,8 @@
 import os, time, sys, shutil, copy
 import numpy as np
 
+from .. import io  as spaceio
+
 # ----------------------------------------------------------------------
 #  Load Simulation
 # ----------------------------------------------------------------------
@@ -300,7 +302,7 @@ def load(config):
 
     # aero_forces = [0.0 for iDim in range(nDim)]
     # for iPoint_bdf in range(nPoint_bdf):
-    #     pressure = konfig.P_DYN_INF*pressureCoeff_bdf[iPoint_bdf] + kongif.P_INF
+    #     pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] + float(konfig.P_INF)
     #     for iDim in range(nDim):
     #         aero_forces[iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
     # print "AERO FORCES: ", aero_forces
@@ -311,7 +313,7 @@ def load(config):
     load_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
 
     for iPoint_bdf in range(nPoint_bdf):
-        pressure = konfig.P_DYN_INF*pressureCoeff_bdf[iPoint_bdf] # + konfig.P_INF # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
+        pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
         for iDim in range(nDim):
           if not iPoint_bdf+1 in apply_fuse_r:
               load_bdf[iPoint_bdf][iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
