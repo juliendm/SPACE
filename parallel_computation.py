@@ -23,7 +23,7 @@ def main():
     project = SPACE.project.Project(config, state, None, 'GEOMETRY_DVS')
 
     konfig = copy.deepcopy(config)
-    project.func('GEOMETRY', konfig)
+    project.func('STRUCTURE', konfig)
 
 # -------------------------------------------------------------------
 #  Run Main Program
