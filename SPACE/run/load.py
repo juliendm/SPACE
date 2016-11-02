@@ -19,7 +19,7 @@ def load(config):
     konfig = copy.deepcopy(config)
 
     # Read bdf
-    bdf = open(konfig.STRUCT_SURFACE + '.bdf')
+    bdf = open(konfig.STRUCT + '.bdf')
     coord_bdf = []
     elem_bdf = []
     elem_tag_bdf = []
@@ -28,7 +28,7 @@ def load(config):
         data = line.split()
         if (line[0]=="$" and len(data) == 3):
             descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
-        if (line[0]=="G" and len(data) == 6):
+        elif (line[0]=="G" and len(data) == 6):
             vec = [float(data[3]), float(data[4].strip('*'))]
         elif (line[0]=="*" and len(data) == 5):
             vec.append(float(data[2]))
@@ -43,7 +43,7 @@ def load(config):
     # Read mesh
     nDim = 3
     nNode = 4
-    mesh = open(konfig.STRUCT_SURFACE + '.mesh')
+    mesh = open(konfig.STRUCT + '_surface.mesh')
     line = mesh.readline()
     while not line.strip() == 'Vertices':
         line = mesh.readline()
@@ -71,7 +71,7 @@ def load(config):
     mesh.close()
 
     # Read sol
-    sol = open(konfig.STRUCT_SURFACE + '.sol')
+    sol = open(konfig.STRUCT + '_surface.sol')
     line = sol.readline()
     while not line.strip() == 'SolAtVertices':
         line = sol.readline()

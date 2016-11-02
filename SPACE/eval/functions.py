@@ -138,7 +138,7 @@ def structure( config, state=None ):
         link.append(name)
         name = files.STRUCT_SURFACE_MESH
         link.append(name)
-        name = files.STRUCT_SURFACE_BDF
+        name = files.STRUCT_BDF
         link.append(name)
 
         # output redirection
@@ -184,7 +184,7 @@ def geometry( config, state=None ):
     # ----------------------------------------------------    
     
     # redundancy check
-    geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_SURFACE_BDF','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH'] ] )
+    geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH'] ] )
 
     if not geometry_done:
 
@@ -205,12 +205,14 @@ def geometry( config, state=None ):
                 push.extend([name])
                 if 'STRUCT_SURFACE_MESH' in info.FILES:
                     push.append(info.FILES['STRUCT_SURFACE_MESH'])
-                if 'STRUCT_SURFACE_BDF' in info.FILES:
-                    push.append(info.FILES['STRUCT_SURFACE_BDF'])
+                if 'STRUCT_BDF' in info.FILES:
+                    push.append(info.FILES['STRUCT_BDF'])
+                if 'STRUCT_MESH' in info.FILES:
+                    push.append(info.FILES['STRUCT_MESH'])
 
     # return output 
     geo = spaceutil.ordered_bunch()
-    for key in ['STRUCT_SURFACE_BDF','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH']:
+    for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH']:
         if state.FILES.has_key(key):
             geo[key] = state.FILES[key]
 

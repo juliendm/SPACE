@@ -51,14 +51,15 @@ def geometry ( config ):
     # bse.vec['pt_str'].export_tec_str()
     # bse.vec['pt_str'].export_STL()
     bse.vec['cp_str'].export_IGES()
-    if konfig['STRUCT_SURFACE'] != 'NONE': pgm.meshStructure(konfig['STRUCT_SURFACE'])
+    if konfig['STRUCT'] != 'NONE': pgm.meshStructure(konfig['STRUCT'])
 
     # info out
     info = spaceio.State()
     info.FILES.FLUID_SURFACE_MESH = konfig['FLUID_SURFACE'] + '.mesh'
-    if konfig['STRUCT_SURFACE'] != 'NONE':
-        info.FILES.STRUCT_SURFACE_BDF = konfig['STRUCT_SURFACE'] + '.bdf'
-        info.FILES.STRUCT_SURFACE_MESH = konfig['STRUCT_SURFACE'] + '.mesh'
+    if konfig['STRUCT'] != 'NONE':
+        info.FILES.STRUCT_BDF = konfig['STRUCT'] + '.bdf'
+        info.FILES.STRUCT_MESH = konfig['STRUCT'] + '.mesh'
+        info.FILES.STRUCT_SURFACE_MESH = konfig['STRUCT'] + '_surface.mesh'
     return info
 
 class Spaceplane(PGMconfiguration):

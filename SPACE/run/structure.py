@@ -63,7 +63,7 @@ def structure(config):
 
     structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
 
-    FEASolver = pytacs.pyTACS(konfig.STRUCT_SURFACE + '.bdf', comm=comm, options=structOptions)
+    FEASolver = pytacs.pyTACS(konfig.STRUCT + '.bdf', comm=comm, options=structOptions)
 
     SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','CTAIL:LOW','CTAIL_T','FUSE_R']
     SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FLAP_T','FUSE_F']

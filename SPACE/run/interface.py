@@ -80,7 +80,7 @@ def INT(config):
     """
     konfig = copy.deepcopy(config)
     
-    os.system('mshint ' + konfig.FLUID_SURFACE + '.mesh ' + konfig.STRUCT_SURFACE + '.mesh > log_mshint.out')
+    os.system('mshint ' + konfig.FLUID_SURFACE + '.mesh ' + konfig.STRUCT + '_surface.mesh > log_mshint.out')
     
     return
 
