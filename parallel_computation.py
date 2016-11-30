@@ -20,10 +20,39 @@ def main():
     #state.find_files(config)
 
     # Project
-    project = SPACE.project.Project(config, state, None, 'GEOMETRY_DVS')
+    project = SPACE.project.Project(config, state, None, 'GEOMETRY_DVS_PARALLEL')
 
     konfig = copy.deepcopy(config)
-    project.func('STRUCTURE', konfig)
+
+    procs = []
+
+    konfig.DV1 = '-0.5'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '-0.4'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '-0.3'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '-0.2'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '-0.1'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.0'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.1'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.2'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.3'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.4'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.5'
+    procs.append(project.func('STRUCTURE', konfig))
+    konfig.DV1 = '0.6'
+    procs.append(project.func('STRUCTURE', konfig))
+
+    for proc in procs:
+        proc.wait()
 
 # -------------------------------------------------------------------
 #  Run Main Program

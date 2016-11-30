@@ -3,9 +3,11 @@
 from interface import  \
     build_command     ,\
     run_command       ,\
+    CFD               ,\
     GHS               ,\
     INT               ;
 
+from direct      import direct
 from geometry    import geometry
 from fluid_mesh  import fluid_mesh
 from structure   import structure

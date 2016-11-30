@@ -5,13 +5,18 @@
 # ----------------------------------------------------------------------
 
 import os, sys, shutil, copy, time
-from .. import run  as spacerun
-from .. import io   as spaceio
-from .. import util as spaceutil
-from ..io import redirect_folder, redirect_output
 
-sys.path.append(os.environ['SU2_RUN'])
-import SU2
+# from .. import run  as spacerun
+# from .. import io   as spaceio
+# from .. import util as spaceutil
+# from ..io import redirect_folder, redirect_output
+
+sys.path.append(os.environ['SPACE_RUN'])
+import SPACE
+from SPACE import run  as spacerun
+from SPACE import io   as spaceio
+from SPACE import util as spaceutil
+from SPACE.io import redirect_folder, redirect_output
 
 # ----------------------------------------------------------------------
 #  Main Function Interface
@@ -56,6 +61,9 @@ def aerodynamics( config, state=None ):
     state = spaceio.State(state)
     if not state.FILES.has_key('CONFIG_AERO'):
         state.FILES.CONFIG_AERO = config['CONFIG_AERO_FILENAME']
+
+    # console output
+    log_direct = 'log_direct.out'
     
     # ----------------------------------------------------    
     #  Generate Mesh
@@ -73,7 +81,7 @@ def aerodynamics( config, state=None ):
     direct_done = all( [ state.FILES.has_key(key) for key in ['FLUID_SURFACE_FLOW'] ] )
     if not direct_done:
     
-        config_aero = SU2.io.Config(config.CONFIG_AERO_FILENAME)
+        config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
         config_aero.MESH_FILENAME = config.FLUID_VOLUME + '.su2'
         config_aero.SURFACE_FLOW_FILENAME = config.FLUID_SURFACE_FLOW
         config_aero.MACH_NUMBER = config.MACH_NUMBER
@@ -85,14 +93,47 @@ def aerodynamics( config, state=None ):
         config_aero.REF_LENGTH_MOMENT = config.REF_LENGTH_MOMENT
         config_aero.REF_AREA = config.REF_AREA
 
-        state_aero = SU2.io.State()
+        files = state.FILES
+        pull = []; link = []
+        
+        # files: mesh
+        name = files.FLUID_VOLUME_SU2
+        link.append(name)
 
-        SU2.eval.func('ALL', config_aero, state_aero)
+        # output redirection
+        with redirect_folder( 'DIRECT', pull, link ) as push:
+            with redirect_output(log_direct):     
+                
+                # # RUN DIRECT SOLUTION # #
+                info = spacerun.direct(config_aero)
+                #spacerun.restart2solution(config_aero,info)
+                state.update(info)
+                
+                # direct files to push
+                name = info.FILES['FLUID_SURFACE_FLOW']
+                push.extend([name])
 
-        shutil.move('DIRECT/' + config.FLUID_SURFACE_FLOW + '.dat','.')
-        state.FILES.FLUID_SURFACE_FLOW = config.FLUID_SURFACE_FLOW + '.dat'
+    # return output 
+    aero = spaceutil.ordered_bunch()
+    for key in ['FLUID_SURFACE_FLOW']:
+        if state.FILES.has_key(key):
+            aero[key] = state.FILES[key]
 
-    #return funcs
+    return aero
+
+
+
+
+
+
+    #     state_aero = SU2.io.State()
+
+    #     SU2.eval.func('ALL', config_aero, state_aero)
+
+    #     shutil.move('DIRECT/' + config.FLUID_SURFACE_FLOW + '.dat','.')
+    #     state.FILES.FLUID_SURFACE_FLOW = config.FLUID_SURFACE_FLOW + '.dat'
+
+    # #return funcs
 
 #: def aerodynamics()
 
@@ -282,3 +323,13 @@ def fluid_mesh( config, state=None ):
     return fluid
 
 #: def fluid_mesh()
+
+# -------------------------------------------------------------------
+#  Run Main Program
+# -------------------------------------------------------------------
+
+# this is only accessed if running from command prompt
+if __name__ == '__main__':
+    
+    config = spaceio.Config('config_DSN.cfg')
+    function('AERODYNAMICS', config)

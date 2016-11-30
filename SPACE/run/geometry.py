@@ -48,7 +48,7 @@ def geometry ( config ):
 
     # bse.vec['pt_str']._hidden[:] = False
     bse.vec['pt_str'].export_MESH(konfig['FLUID_SURFACE'] + '.mesh')
-    # bse.vec['pt_str'].export_tec_str()
+    bse.vec['pt_str'].export_tec_str()
     # bse.vec['pt_str'].export_STL()
     bse.vec['cp_str'].export_IGES()
     if konfig['STRUCT'] != 'NONE': pgm.meshStructure(konfig['STRUCT'])
@@ -162,9 +162,9 @@ class Spaceplane(PGMconfiguration):
 
         # tails
 
-        tail_root_origin_x = 12.9
+        tail_root_origin_x = 13.3
         tail_tip_origin_x = 16.3
-        tail_length_root = 4.5
+        tail_length_root = 4.1
         tail_length_tip = 2.5
         tail_height = 3.8
 
@@ -196,8 +196,8 @@ class Spaceplane(PGMconfiguration):
 
         #comps['fuse'].faces['rgt'].set_option('num_cp', 'u', [4,4,4,4,4,4])
 
-        #comps['fuse'].faces['rgt'].set_option('num_cp', 'v', [13,8,4,4,4,8,4,15,4,10,4,4,4])
-        #comps['fuse'].faces['rgt'].set_option('num_pt', 'v', [40,16,16,16,16,60,16,60,16,16,70,16,16], both=False)
+        #comps['fuse'].faces['bot'].set_option('num_cp', 'v', [4,4,4,4,8,4,4,4,4,4,4,4,4,4])
+        #comps['fuse'].faces['bot'].set_option('num_pt', 'v', [16,16,16,16,32,16,16,16,16,16,16,16,16,16], both=True)
 
         #comps['fuse'].faces['bot'].set_option('num_cp', 'u', [4,16,16,4])
 
@@ -226,13 +226,12 @@ class Spaceplane(PGMconfiguration):
                     afm.addVertFlip('MSTRINGW:%02d:b:l:%02d' % (i,j),'lwing',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[0.15,0])
                     afm.addVertFlip('MSTRINGW:%02d:a:r:%02d' % (i,j),'rwing',[idims[i],1-jdims[j]],[idims[i],1-jdims[j+1]],w=[1,0.85])
                     afm.addVertFlip('MSTRINGW:%02d:b:r:%02d' % (i,j),'rwing',[idims[i],1-jdims[j]],[idims[i],1-jdims[j+1]],w=[0.15,0])
-        idims_sec1 = np.array([idims[1], idims[rear_spar]]) #np.linspace(0.05,rear_spar,4)
-        for j in range(idims_sec1.shape[0]-1):
-            afm.addVertFlip('MSPARW:%02d:l:%02d' % (idims.shape[0],j),'lwing',[idims_sec1[j],jdims[j]],[idims_sec1[j+1],jdims[j+1]])
-            afm.addVertFlip('MSPARW:%02d:r:%02d' % (idims.shape[0],j),'rwing',[idims_sec1[j],1-jdims[j]],[idims_sec1[j+1],1-jdims[j+1]])
-        idims_sec2 = np.linspace(0.3,idims[idims.shape[0]-1],9)
+        # idims_sec1 = np.array([idims[1], idims[rear_spar]]) #np.linspace(0.05,rear_spar,4)
+        # for j in range(idims_sec1.shape[0]-1):
+        #     afm.addVertFlip('MSPARW:%02d:l:%02d' % (idims.shape[0],j),'lwing',[idims_sec1[j],jdims[j]],[idims_sec1[j+1],jdims[j+1]])
+        #     afm.addVertFlip('MSPARW:%02d:r:%02d' % (idims.shape[0],j),'rwing',[idims_sec1[j],1-jdims[j]],[idims_sec1[j+1],1-jdims[j+1]])
 
-        idims = np.linspace(idims[1],0.55,7)
+        idims = idims[1:6]
         for i in range(idims.shape[0]):
             if i is 0 or i is idims.shape[0]-1:
                 afm.addCtrVert('MSPARC:%02d' % (i),'lwing','rwing',idims[i])
@@ -321,12 +320,6 @@ def compute_wing_profiles(dv1, dv2, dv3, wing_width_section_1_ini, wing_width_se
     x_l_edge[2,:] = profile[65:130,0] * scale_ini
     y_u_edge[2,:] = profile[0:65,1]
     y_l_edge[2,:] = profile[65:130,1]
-
-    n_profiles = n_profiles_0 + n_profiles_1 + n_profiles_2 - 2
-    x_u = np.zeros((n_profiles,len(x_u_edge[0,:])))
-    y_u = np.zeros((n_profiles,len(y_u_edge[0,:])))
-    x_l = np.zeros((n_profiles,len(x_l_edge[0,:])))
-    y_l = np.zeros((n_profiles,len(y_l_edge[0,:])))
 
 
     cutting_length = max(x_u_root)
@@ -484,6 +477,7 @@ def compute_wing_profiles(dv1, dv2, dv3, wing_width_section_1_ini, wing_width_se
             if (x_distrib[k] > 0):
                 x_distrib[k] = x_distrib[k]/(1.0-pc_hinge)*(np.max(x_u_edge[n,:])-x_hinge)+x_hinge
             else:
+                n_last = k # is the last point before hinge location assuming x_distrib is in increasing order
                 x_distrib[k] = x_distrib[k]/pc_hinge*(x_hinge-np.min(x_u_edge[n,:]))+x_hinge
         x_distrib[0] = x_u_edge[n,0]
         x_distrib[len(x_distrib)-1] = x_u_edge[n,len(x_distrib)-1]
@@ -492,7 +486,51 @@ def compute_wing_profiles(dv1, dv2, dv3, wing_width_section_1_ini, wing_width_se
         x_l_edge[n,:] = x_distrib
         y_l_edge[n,:] = f_l(x_l_edge[n,:])
 
+    # Redistribute points
+
+    n_points = 65
+    n_first = 15
+
+    f_u = interpolate.interp1d(x_u_root,y_u_root)
+    x_u_root = np.append(np.append(x_u_root[0:n_first],np.linspace(x_u_root[n_first],x_u_root[-n_last],n_points-n_first-n_last+1)),x_u_root[-n_last+1:len(x_u_root)])
+    y_u_root = f_u(x_u_root)
+    f_l = interpolate.interp1d(x_l_root,y_l_root)
+    x_l_root = np.append(np.append(x_l_root[0:n_first],np.linspace(x_l_root[n_first],x_l_root[-n_last],n_points-n_first-n_last+1)),x_l_root[-n_last+1:len(x_l_root)])
+    y_l_root = f_l(x_l_root)
+
+    f_u = interpolate.interp1d(x_u_in_cut,y_u_in_cut)
+    x_u_in_cut = np.append(np.append(x_u_in_cut[0:n_first],np.linspace(x_u_in_cut[n_first],x_u_in_cut[-n_last],n_points-n_first-n_last+1)),x_u_in_cut[-n_last+1:len(x_u_in_cut)])
+    y_u_in_cut = f_u(x_u_in_cut)
+    f_l = interpolate.interp1d(x_l_in_cut,y_l_in_cut)
+    x_l_in_cut = np.append(np.append(x_l_in_cut[0:n_first],np.linspace(x_l_in_cut[n_first],x_l_in_cut[-n_last],n_points-n_first-n_last+1)),x_l_in_cut[-n_last+1:len(x_l_in_cut)])
+    y_l_in_cut = f_l(x_l_in_cut)
+
+
+    x_u_edge_new = np.zeros((3,n_points))
+    y_u_edge_new = np.zeros((3,n_points))
+    x_l_edge_new = np.zeros((3,n_points))
+    y_l_edge_new = np.zeros((3,n_points))
+
+    for n in range(3):
+        f_u = interpolate.interp1d(x_u_edge[n,:],y_u_edge[n,:])
+        x_u_edge_new[n,:] = np.append(np.append(x_u_edge[n,0:n_first],np.linspace(x_u_edge[n,n_first],x_u_edge[n,-n_last],n_points-n_first-n_last+1)),x_u_edge[n,-n_last+1:len(x_u_edge[n,:])])
+        y_u_edge_new[n,:] = f_u(x_u_edge_new[n,:])
+        f_l = interpolate.interp1d(x_l_edge[n,:],y_l_edge[n,:])
+        x_l_edge_new[n,:] = np.append(np.append(x_l_edge[n,0:n_first],np.linspace(x_l_edge[n,n_first],x_l_edge[n,-n_last],n_points-n_first-n_last+1)),x_l_edge[n,-n_last+1:len(x_l_edge[n,:])])
+        y_l_edge_new[n,:] = f_l(x_l_edge_new[n,:])
+
+    x_u_edge = x_u_edge_new
+    y_u_edge = y_u_edge_new
+    x_l_edge = x_l_edge_new
+    y_l_edge = y_l_edge_new
+
     # Propagating profiles
+
+    n_profiles = n_profiles_0 + n_profiles_1 + n_profiles_2 - 2
+    x_u = np.zeros((n_profiles,len(x_u_edge[0,:])))
+    y_u = np.zeros((n_profiles,len(y_u_edge[0,:])))
+    x_l = np.zeros((n_profiles,len(x_l_edge[0,:])))
+    y_l = np.zeros((n_profiles,len(y_l_edge[0,:])))
 
     for n in range(n_profiles_0):
         coeff = n/float(n_profiles_0-1)

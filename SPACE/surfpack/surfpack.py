@@ -21,8 +21,6 @@ class Surfpack(object):
         self.ndim = ndim
         self.array = c_double * ndim
 
-        self.currentName = None
-
     def load_data(self,data):
         
         surfpack_lib.load_data(self.name,data,self.ndim,1,0)
@@ -94,14 +92,47 @@ class Surfpack(object):
         opt.setOption('maxOuterIter',10)
         opt.setOption('stopCriteria',1)       
         opt.setOption('SwarmSize',self.ndim*100)
-        opt(prob) 
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        opt(prob)
+        print '===>'
+        print prob.solution(0)
+        print '<==='
+        print '===>'
+        print prob.solution(1)
+        print '<==='
+        print '===>'
+        print prob.solution(2)
+        print '<==='
+        print '===>'
+        print prob.solution(3)
+        print '<==='
+        print '===>'
+        print prob.solution(4)
+        print '<==='
+        print '===>'
+        print prob.solution(5)
+        print '<==='
+        print '===>'
+        print prob.solution(6)
+        print '<==='
+        print '===>'
+        print prob.solution(7)
+        print '<==='
+        print '===>'
+        print prob.solution(8)
+        print '<==='
 
         opt = pyOpt.SLSQP()
         opt.setOption('IPRINT',-1)
         opt.setOption('ACC',1e-5)
         [YI_min,X_min,Info] = opt(prob.solution(0),sens_type='FD')
-
-        self.currentName = None
 
         return X_min
 

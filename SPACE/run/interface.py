@@ -16,8 +16,11 @@ from ..util import which
 BIN_PATH = os.environ['BIN_PATH'] 
 sys.path.append( BIN_PATH )
 
+SU2_RUN = os.environ['SU2_RUN'] 
+sys.path.append( SU2_RUN )
+
 # SU2 suite run command template
-base_Command = os.path.join(BIN_PATH,'%s')
+base_Command = os.path.join(SU2_RUN,'%s')
 
 # check for slurm
 slurm_job = os.environ.has_key('SLURM_JOBID')
@@ -44,8 +47,21 @@ return_code_map = {
 }
     
 # ------------------------------------------------------------
-#  SU2 Suite Interface Functions
+#  SPACE Suite Interface Functions
 # ------------------------------------------------------------
+
+def CFD(config):
+    """ run CFD
+        partitions set by config.NUMBER_PART
+    """
+    konfig = copy.deepcopy(config)
+
+    tempname = 'config_CFD.cfg'
+    konfig.dump(tempname)
+
+    os.system('SU2_CFD config_CFD.cfg > log_cfd.out') # ONLY WORKS WITH A SERIAL COMPILED SU2
+    
+    return
 
 def GHS(config):
     """ run GHS
@@ -64,9 +80,10 @@ def GHS(config):
     in_file = konfig.FLUID_BOUNDARY_FILENAME.split('.')
     in_file = in_file[0] + '_updated.' + in_file[1]
     
-    the_Command = 'ghs3d -O 1 -in ' + in_file + ' -out ' + konfig.FLUID_VOLUME + '.meshb'
-    the_Command = build_command( the_Command , processes )
-    run_command( the_Command )
+    the_Command = 'ghs3d -O 1 -in ' + in_file + ' -out ' + konfig.FLUID_VOLUME + '.meshb > log_ghs.out'
+    # the_Command = build_command( the_Command , processes )
+    # run_command( the_Command )
+    os.system(the_Command)
     
     os.system('meshutils -O 3 -in ' + konfig.FLUID_VOLUME + '.meshb -out ' + konfig.FLUID_VOLUME + ' > log_meshutil.out')
 

@@ -9,6 +9,10 @@ from .. import io   as spaceio
 from .  import func as spacefunc
 from ..io import redirect_folder, save_data
 
+import subprocess
+
+SPACE_RUN = os.environ['SPACE_RUN']
+
 # ----------------------------------------------------------------------
 #  Design Class
 # ----------------------------------------------------------------------
@@ -67,7 +71,14 @@ class Design(object):
             
             # run 
             inputs = args + (config,state)
-            vals = eval_func(*inputs)
+            #vals = eval_func(*inputs)
+
+            # PUT EVAL_FUNC IN CONFIG AND MODIFY FUNCTIONS.PY
+            Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/functions.py'
+            proc = subprocess.Popen( Command, shell=True    ,
+                             stdout=sys.stdout      , 
+                             stderr=subprocess.PIPE  )
+
             
             # save design
             if state.toc(timestamp):
@@ -78,7 +89,7 @@ class Design(object):
         # update files
         files.update(state['FILES'])
         
-        return vals
+        return proc
 
     def func(self,func_name):
         """ Evaluates SU2 Design Functions by Name """

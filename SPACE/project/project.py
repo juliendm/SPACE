@@ -107,29 +107,32 @@ class Project(object):
         
             # start design
             design = self.new_design(konfig)
+            print konfig.DV1
             
             if config.get('CONSOLE','VERBOSE') == 'VERBOSE':
                 print os.path.join(self.folder,design.folder)
             timestamp = design.state.tic()
             
             # run design+
-            vals = design._eval(func,*args)
+            proc = design._eval(func,*args)
+            # proc = Process(target=design._eval, args=(func,) + args)
+            # proc.start()
             
-            # check for update
-            if design.state.toc(timestamp):
+            # # check for update
+            # if design.state.toc(timestamp):
                 
-                # recompile design results
-                self.compile_results()
+            #     # recompile design results
+            #     self.compile_results()
 
-                # save data
-                spaceio.save_data(filename,self)
+            #     # save data
+            #     spaceio.save_data(filename,self)
                 
             #: if updated
             
         #: with redirect folder
         
         # done, return output
-        return vals
+        return proc
     
     def unpack_dvs(self,dvs):
         dvs = copy.deepcopy(dvs)
@@ -169,6 +172,11 @@ class Project(object):
         # find closest design
         closest,delta = self.closest_design(konfig)
         # found existing design
+
+
+        # IMPROVE
+        delta = 1e8
+
         if delta == 0.0 and closest:
             design = closest
         # start new design
@@ -238,6 +246,9 @@ class Project(object):
                 ztate.FILES[key] = name
             
         # name new folder
+        print '# ' + self._design_folder
+        print '# ' + self._design_number
+        print '# ' + str(len(self.designs))
         folder = self._design_folder.replace('*',self._design_number)
         folder = folder % (len(self.designs) + 1)
 
