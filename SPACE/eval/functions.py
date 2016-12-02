@@ -5,6 +5,7 @@
 # ----------------------------------------------------------------------
 
 import os, sys, shutil, copy, time
+from optparse import OptionParser
 
 # from .. import run  as spacerun
 # from .. import io   as spaceio
@@ -13,9 +14,12 @@ import os, sys, shutil, copy, time
 
 sys.path.append(os.environ['SPACE_RUN'])
 import SPACE
+
 from SPACE import run  as spacerun
 from SPACE import io   as spaceio
 from SPACE import util as spaceutil
+
+from SPACE.eval import database as spacedatabase
 from SPACE.io import redirect_folder, redirect_output
 
 # ----------------------------------------------------------------------
@@ -29,8 +33,9 @@ def function( func_name, config, state=None ):
     
     # redundancy check
     if not state.FUNCTIONS.has_key(func_name):
-        # Geometry
-        if func_name == 'AERODYNAMICS':
+        if func_name == 'MISSION':
+            mission( config, state )
+        elif func_name == 'AERODYNAMICS':
             aerodynamics( config, state )
         elif func_name == 'STRUCTURE':
             structure( config, state )
@@ -46,6 +51,68 @@ def function( func_name, config, state=None ):
 
 #: def function()
 
+# ----------------------------------------------------------------------
+#  Mission Analysis Function
+# ----------------------------------------------------------------------
+
+def mission( config, state=None ):
+
+    # ----------------------------------------------------
+    #  Initialize    
+    # ----------------------------------------------------
+    
+    # initialize
+    state = spaceio.State(state)
+
+    # console output
+    log_mission = 'log_mission.out'
+
+    # ----------------------------------------------------    
+    #  Mission Analysis Solution
+    # ----------------------------------------------------    
+    
+    # redundancy check
+    mission_done = False #all( [ state.FILES.has_key(key) for key in ['LOAD'] ] )
+
+    if not mission_done:
+
+        # files to pull
+        files = state.FILES
+        pull = []; link = []
+
+        # # files: mesh
+        # name = files.FLUID_SURFACE_FLOW
+        # link.append(name)
+        # name = files.FLUID_SURFACE_MESH
+        # link.append(name)
+        # name = files.STRUCT_SURFACE_MESH
+        # link.append(name)
+        # name = files.STRUCT_BDF
+        # link.append(name)
+
+        # output redirection
+        with redirect_folder( 'MISSION', pull, link ) as push:
+            with redirect_output(log_mission):
+                
+                database = spacedatabase.Database(config)
+
+                # # RUN MISSION ANALYSIS SOLUTION # #
+                info = spacerun.mission(config, database)
+                state.update(info)
+
+                # direct files to push
+                # name = info.FILES['LOAD']
+                # push.extend([name])
+
+    # return output 
+    mission = spaceutil.ordered_bunch()
+    # for key in ['LOAD']:
+    #     if state.FILES.has_key(key):
+    #         mission[key] = state.FILES[key]
+
+    return mission
+
+#: def mission()
 
 # ----------------------------------------------------------------------
 #  Aerodynamics Function
@@ -160,7 +227,7 @@ def structure( config, state=None ):
     aerodynamics(config,state)
 
     # ----------------------------------------------------    
-    #  Geometry Solution
+    #  Structure Solution
     # ----------------------------------------------------    
     
     # redundancy check
@@ -331,5 +398,12 @@ def fluid_mesh( config, state=None ):
 # this is only accessed if running from command prompt
 if __name__ == '__main__':
     
+    # Command Line Options
+    parser=OptionParser()
+    parser.add_option("-f", "--func",       dest="func_name",
+                      help="read function", metavar="FUNCTION_NAME")
+                      
+    (options, args)=parser.parse_args()
+
     config = spaceio.Config('config_DSN.cfg')
-    function('AERODYNAMICS', config)
+    function(options.func_name, config)

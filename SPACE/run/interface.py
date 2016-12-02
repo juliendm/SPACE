@@ -19,6 +19,9 @@ sys.path.append( BIN_PATH )
 SU2_RUN = os.environ['SU2_RUN'] 
 sys.path.append( SU2_RUN )
 
+MISSION_ANALYSIS_RUN = os.environ['MISSION_ANALYSIS_RUN'] 
+sys.path.append( MISSION_ANALYSIS_RUN )
+
 # SU2 suite run command template
 base_Command = os.path.join(SU2_RUN,'%s')
 
@@ -49,6 +52,17 @@ return_code_map = {
 # ------------------------------------------------------------
 #  SPACE Suite Interface Functions
 # ------------------------------------------------------------
+
+def MIS(config):
+    """ run MIS
+        partitions set by config.NUMBER_PART
+    """
+    konfig = copy.deepcopy(config)
+
+    Command = MISSION_ANALYSIS_RUN + '/optimizer/bin/mission_analysis > optimizer.log'
+    os.system(Command)
+    
+    return
 
 def CFD(config):
     """ run CFD

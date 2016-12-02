@@ -107,7 +107,6 @@ class Project(object):
         
             # start design
             design = self.new_design(konfig)
-            print konfig.DV1
             
             if config.get('CONSOLE','VERBOSE') == 'VERBOSE':
                 print os.path.join(self.folder,design.folder)
@@ -246,9 +245,6 @@ class Project(object):
                 ztate.FILES[key] = name
             
         # name new folder
-        print '# ' + self._design_folder
-        print '# ' + self._design_number
-        print '# ' + str(len(self.designs))
         folder = self._design_folder.replace('*',self._design_number)
         folder = folder % (len(self.designs) + 1)
 

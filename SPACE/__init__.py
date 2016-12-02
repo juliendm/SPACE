@@ -11,6 +11,7 @@ import io
 import eval
 import project
 import util
+import surfpack
 
 try:
     import readline

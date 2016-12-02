@@ -73,8 +73,7 @@ class Design(object):
             inputs = args + (config,state)
             #vals = eval_func(*inputs)
 
-            # PUT EVAL_FUNC IN CONFIG AND MODIFY FUNCTIONS.PY
-            Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/functions.py'
+            Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/functions.py -f ' + args[0]
             proc = subprocess.Popen( Command, shell=True    ,
                              stdout=sys.stdout      , 
                              stderr=subprocess.PIPE  )
