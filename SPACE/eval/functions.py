@@ -5,48 +5,36 @@
 # ----------------------------------------------------------------------
 
 import os, sys, shutil, copy, time
-from optparse import OptionParser
+import numpy as np
 
-# from .. import run  as spacerun
-# from .. import io   as spaceio
-# from .. import util as spaceutil
-# from ..io import redirect_folder, redirect_output
-
-sys.path.append(os.environ['SPACE_RUN'])
-import SPACE
-
-from SPACE import run  as spacerun
-from SPACE import io   as spaceio
-from SPACE import util as spaceutil
-
-from SPACE.eval import database as spacedatabase
-from SPACE.io import redirect_folder, redirect_output
+from .. import run  as spacerun
+from .. import io   as spaceio
+from .. import util as spaceutil
+from ..eval import model as spacemodel
+from ..io   import redirect_folder, redirect_output
 
 # ----------------------------------------------------------------------
 #  Main Function Interface
 # ----------------------------------------------------------------------
 
-def function( func_name, config, state=None ):
+def function(func_name, config, state=None):
     
     # initialize
     state = spaceio.State(state)
     
     # redundancy check
     if not state.FUNCTIONS.has_key(func_name):
-        if func_name == 'MISSION':
-            mission( config, state )
-        elif func_name == 'AERODYNAMICS':
-            aerodynamics( config, state )
-        elif func_name == 'STRUCTURE':
-            structure( config, state )
-        elif func_name == 'GEOMETRY':
-            geometry( config, state )
+        if func_name == 'MISSION': # SPEED_APOGEE
+            mission(config, state)
+        elif func_name == 'AERODYNAMICS': # DRAG, LIFT
+            aerodynamics(config, state)
+        elif func_name == 'STRUCTURE': # MASS
+            structure(config, state)
         else:
             raise Exception, 'unknown function name, %s' % func_name
     
     # prepare output
-    func_out = state.FILES
-    
+    func_out = state.FUNCTIONS
     return copy.deepcopy(func_out)
 
 #: def function()
@@ -55,7 +43,7 @@ def function( func_name, config, state=None ):
 #  Mission Analysis Function
 # ----------------------------------------------------------------------
 
-def mission( config, state=None ):
+def mission(config, state=None):
 
     # ----------------------------------------------------
     #  Initialize    
@@ -72,43 +60,45 @@ def mission( config, state=None ):
     # ----------------------------------------------------    
     
     # redundancy check
-    mission_done = False #all( [ state.FILES.has_key(key) for key in ['LOAD'] ] )
+    mission_done = all([state.FUNCTIONS.has_key(key) for key in ['SPEED_APOGEE']])
 
     if not mission_done:
+
+        data = spaceutil.ordered_bunch()
+        data.lift_sub = spaceutil.ordered_bunch()
+        data.lift_sub.sps = config.DATABASE_LIFT_SUB
+        data.lift_sub.ranges = np.array([[0.5,0.95],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
+        data.lift_sup = spaceutil.ordered_bunch()
+        data.lift_sup.sps = config.DATABASE_LIFT_SUP
+        data.lift_sup.ranges = np.array([[1.1,9.0],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
+        lift_model = spacemodel.RangedModel(data)
+
+        data = spaceutil.ordered_bunch()
+        data.drag_sub = spaceutil.ordered_bunch()
+        data.drag_sub.sps = config.DATABASE_DRAG_SUB
+        data.drag_sub.ranges = np.array([[0.5,0.95],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
+        data.drag_sup = spaceutil.ordered_bunch()
+        data.drag_sup.sps = config.DATABASE_DRAG_SUP
+        data.drag_sup.ranges = np.array([[1.1,9.0],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
+        drag_model = spacemodel.RangedModel(data)
 
         # files to pull
         files = state.FILES
         pull = []; link = []
 
-        # # files: mesh
-        # name = files.FLUID_SURFACE_FLOW
-        # link.append(name)
-        # name = files.FLUID_SURFACE_MESH
-        # link.append(name)
-        # name = files.STRUCT_SURFACE_MESH
-        # link.append(name)
-        # name = files.STRUCT_BDF
-        # link.append(name)
-
         # output redirection
-        with redirect_folder( 'MISSION', pull, link ) as push:
+        with redirect_folder('MISSION', pull, link) as push:
             with redirect_output(log_mission):
-                
-                database = spacedatabase.Database(config)
 
                 # # RUN MISSION ANALYSIS SOLUTION # #
-                info = spacerun.mission(config, database)
+                info = spacerun.mission(config, lift_model, drag_model)
                 state.update(info)
-
-                # direct files to push
-                # name = info.FILES['LOAD']
-                # push.extend([name])
 
     # return output 
     mission = spaceutil.ordered_bunch()
-    # for key in ['LOAD']:
-    #     if state.FILES.has_key(key):
-    #         mission[key] = state.FILES[key]
+    for key in ['SPEED_APOGEE']:
+        if state.FUNCTIONS.has_key(key):
+            mission[key] = state.FUNCTIONS[key]
 
     return mission
 
@@ -118,7 +108,7 @@ def mission( config, state=None ):
 #  Aerodynamics Function
 # ----------------------------------------------------------------------
 
-def aerodynamics( config, state=None ):
+def aerodynamics(config, state=None):
     
     # ----------------------------------------------------
     #  Initialize    
@@ -145,7 +135,7 @@ def aerodynamics( config, state=None ):
     # ----------------------------------------------------    
 
     # redundancy check
-    direct_done = all( [ state.FILES.has_key(key) for key in ['FLUID_SURFACE_FLOW'] ] )
+    direct_done = all([state.FUNCTIONS.has_key(key) for key in spaceio.optnames_aero[:9]])
     if not direct_done:
     
         config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
@@ -168,7 +158,7 @@ def aerodynamics( config, state=None ):
         link.append(name)
 
         # output redirection
-        with redirect_folder( 'DIRECT', pull, link ) as push:
+        with redirect_folder('DIRECT', pull, link) as push:
             with redirect_output(log_direct):     
                 
                 # # RUN DIRECT SOLUTION # #
@@ -180,27 +170,13 @@ def aerodynamics( config, state=None ):
                 name = info.FILES['FLUID_SURFACE_FLOW']
                 push.extend([name])
 
-    # return output 
+    # return output
     aero = spaceutil.ordered_bunch()
-    for key in ['FLUID_SURFACE_FLOW']:
-        if state.FILES.has_key(key):
-            aero[key] = state.FILES[key]
+    for key in spaceio.optnames_aero:
+        if state.FUNCTIONS.has_key(key):
+            aero[key] = state.FUNCTIONS[key]
 
     return aero
-
-
-
-
-
-
-    #     state_aero = SU2.io.State()
-
-    #     SU2.eval.func('ALL', config_aero, state_aero)
-
-    #     shutil.move('DIRECT/' + config.FLUID_SURFACE_FLOW + '.dat','.')
-    #     state.FILES.FLUID_SURFACE_FLOW = config.FLUID_SURFACE_FLOW + '.dat'
-
-    # #return funcs
 
 #: def aerodynamics()
 
@@ -208,7 +184,7 @@ def aerodynamics( config, state=None ):
 #  Structure Function
 # ----------------------------------------------------------------------
 
-def structure( config, state=None ):
+def structure(config, state=None):
 
     # ----------------------------------------------------
     #  Initialize    
@@ -231,7 +207,7 @@ def structure( config, state=None ):
     # ----------------------------------------------------    
     
     # redundancy check
-    structure_done = all( [ state.FILES.has_key(key) for key in ['LOAD'] ] )
+    structure_done = all([state.FUNCTIONS.has_key(key) for key in ['MASS']])
 
     if not structure_done:
 
@@ -250,22 +226,18 @@ def structure( config, state=None ):
         link.append(name)
 
         # output redirection
-        with redirect_folder( 'STRUCTURE', pull, link ) as push:
+        with redirect_folder('STRUCTURE', pull, link) as push:
             with redirect_output(log_structure):
                 
                 # # RUN STRUCTURE SOLUTION # #
                 info = spacerun.structure(config)
                 state.update(info)
 
-                # direct files to push
-                name = info.FILES['LOAD']
-                push.extend([name])
-
     # return output 
     struct = spaceutil.ordered_bunch()
-    for key in ['LOAD']:
-        if state.FILES.has_key(key):
-            struct[key] = state.FILES[key]
+    for key in ['MASS']:
+        if state.FUNCTIONS.has_key(key):
+            struct[key] = state.FUNCTIONS[key]
 
     return struct
 
@@ -275,7 +247,7 @@ def structure( config, state=None ):
 #  Geometry Function
 # ----------------------------------------------------------------------
 
-def geometry( config, state=None ):
+def geometry(config, state=None):
     
     # ----------------------------------------------------
     #  Initialize    
@@ -301,7 +273,7 @@ def geometry( config, state=None ):
         pull = []; link = []
 
         # output redirection
-        with redirect_folder( 'GEOMETRY', pull, link ) as push:
+        with redirect_folder('GEOMETRY', pull, link) as push:
             with redirect_output(log_geometry):
                 
                 # # RUN GEOMETRY SOLUTION # #
@@ -318,13 +290,13 @@ def geometry( config, state=None ):
                 if 'STRUCT_MESH' in info.FILES:
                     push.append(info.FILES['STRUCT_MESH'])
 
-    # return output 
-    geo = spaceutil.ordered_bunch()
-    for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH']:
-        if state.FILES.has_key(key):
-            geo[key] = state.FILES[key]
+    # # return output 
+    # geo = spaceutil.ordered_bunch()
+    # for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH']:
+    #     if state.FILES.has_key(key):
+    #         geo[key] = state.FILES[key]
 
-    return geo
+    # return geo
 
 #: def geometry()
 
@@ -332,7 +304,7 @@ def geometry( config, state=None ):
 #  Fluid Mesh Function
 # ----------------------------------------------------------------------
 
-def fluid_mesh( config, state=None ):
+def fluid_mesh(config, state=None):
 
     # ----------------------------------------------------
     #  Initialize    
@@ -353,7 +325,7 @@ def fluid_mesh( config, state=None ):
     # ----------------------------------------------------    
     
     # redundancy check
-    fluid_mesh_done = all( [ state.FILES.has_key(key) for key in ['FLUID_BOUNDARY_UPDATED','FLUID_VOLUME_MESH','FLUID_VOLUME_SU2'] ] )
+    fluid_mesh_done = all([state.FILES.has_key(key) for key in ['FLUID_BOUNDARY_UPDATED','FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']])
 
     if not fluid_mesh_done:
 
@@ -370,7 +342,7 @@ def fluid_mesh( config, state=None ):
         link.append(name)
         
         # output redirection
-        with redirect_folder( 'FLUID_MESH', pull, link ) as push:
+        with redirect_folder('FLUID_MESH', pull, link) as push:
             with redirect_output(log_fluid_mesh):     
                 
                 # # RUN FLUID MESH SOLUTION # #
@@ -381,29 +353,12 @@ def fluid_mesh( config, state=None ):
                 name = info.FILES['FLUID_VOLUME_SU2']
                 push.extend([name])
 
-    # return output 
-    fluid = spaceutil.ordered_bunch()
-    for key in ['FLUID_BOUNDARY_UPDATED','FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']:
-        if state.FILES.has_key(key):
-            fluid[key] = state.FILES[key]
+    # # return output 
+    # fluid = spaceutil.ordered_bunch()
+    # for key in ['FLUID_BOUNDARY_UPDATED','FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']:
+    #     if state.FILES.has_key(key):
+    #         fluid[key] = state.FILES[key]
 
-    return fluid
+    # return fluid
 
 #: def fluid_mesh()
-
-# -------------------------------------------------------------------
-#  Run Main Program
-# -------------------------------------------------------------------
-
-# this is only accessed if running from command prompt
-if __name__ == '__main__':
-    
-    # Command Line Options
-    parser=OptionParser()
-    parser.add_option("-f", "--func",       dest="func_name",
-                      help="read function", metavar="FUNCTION_NAME")
-                      
-    (options, args)=parser.parse_args()
-
-    config = spaceio.Config('config_DSN.cfg')
-    function(options.func_name, config)

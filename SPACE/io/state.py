@@ -73,7 +73,7 @@ class State(ordered_bunch):
                 output += '\n        %s' % v1
         return output
     
-    def pullnlink(self,config):
+    def pullnlink(self,main,config):
         """ pull,link = SU2.io.State.pullnlink(config)
             returns lists pull and link of files for folder
             redirection, based on a given config
@@ -83,7 +83,10 @@ class State(ordered_bunch):
         
         # choose files to pull and link
         for key,value in self.FILES.iteritems():
-            pull.append(value)
+            if main:
+                pull.append(value)
+            else:
+                link.append(value)
         #: for each filename
         
         return pull,link
@@ -111,10 +114,6 @@ class State(ordered_bunch):
         
         files = self.FILES
         
-        fluid_boundary_name     = config.FLUID_BOUNDARY_FILENAME
-        correspondance_name     = config.CORRESPONDANCE_FILENAME
-        config_aero_name        = config.CONFIG_AERO_FILENAME
-        
         def register_file(label,filename):
             if not files.has_key(label):
                 if os.path.exists(filename):
@@ -125,9 +124,15 @@ class State(ordered_bunch):
         #: register_file()                
 
         # mesh
-        register_file('FLUID_BOUNDARY',fluid_boundary_name)
-        register_file('CORRESPONDANCE',correspondance_name)
-        register_file('CONFIG_AERO',config_aero_name)
+        
+        if ('DATABASE_LIFT_SUP' in config.keys()): register_file('DATABASE_LIFT_SUP',config.DATABASE_LIFT_SUP)
+        if ('DATABASE_DRAG_SUP' in config.keys()): register_file('DATABASE_DRAG_SUP',config.DATABASE_DRAG_SUP)
+        if ('DATABASE_LIFT_SUB' in config.keys()): register_file('DATABASE_LIFT_SUB',config.DATABASE_LIFT_SUB)
+        if ('DATABASE_DRAG_SUB' in config.keys()): register_file('DATABASE_DRAG_SUB',config.DATABASE_DRAG_SUB)
+
+        if ('FLUID_BOUNDARY_FILENAME' in config.keys()): register_file('FLUID_BOUNDARY',config.FLUID_BOUNDARY_FILENAME)
+        if ('CORRESPONDANCE_FILENAME' in config.keys()): register_file('CORRESPONDANCE',config.CORRESPONDANCE_FILENAME)
+        if ('CONFIG_AERO_FILENAME' in config.keys()):    register_file('CONFIG_AERO',config.CONFIG_AERO_FILENAME)
         
         return
     

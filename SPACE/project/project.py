@@ -16,6 +16,8 @@ from warnings import warn, simplefilter
 
 inf = 1.0e20
 
+import subprocess
+SPACE_RUN = os.environ['SPACE_RUN']
 
 # -------------------------------------------------------------------
 #  Project Class
@@ -27,12 +29,11 @@ class Project(object):
     _design_number = '%03d'
     
     def __init__( self, config, state=None , 
-                  designs=None, folder='.' ,
+                  designs=None, models=None , folder='.' ,
                   warn = True                ):
         
         folder = folder.rstrip('/')+'/'
         if '*' in folder: folder = spaceio.next_folder(folder)        
-        if designs is None: designs = []
         
         print 'New Project: %s' % (folder)
         
@@ -48,26 +49,55 @@ class Project(object):
 
         state.find_files(config)
 
-        if 'FLUID_BOUNDARY' not in state.FILES:
-            raise Exception , 'Could not find mesh file: %s' % config.FLUID_BOUNDARY_FILENAME
-        if 'CORRESPONDANCE' not in state.FILES:
-            raise Exception , 'Could not find dat file: %s' % config.CORRESPONDANCE_FILENAME
-        if 'CONFIG_AERO' not in state.FILES:
-            raise Exception , 'Could not find config file: %s' % config.CONFIG_AERO_FILENAME
+        # check has the needed files
+        if ('DATABASE_LIFT_SUP' in config.keys()):
+            if 'DATABASE_LIFT_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_LIFT_SUP
+        if ('DATABASE_DRAG_SUP' in config.keys()):
+            if 'DATABASE_DRAG_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_DRAG_SUP
+        if ('DATABASE_LIFT_SUB' in config.keys()):
+            if 'DATABASE_LIFT_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_LIFT_SUB
+        if ('DATABASE_DRAG_SUB' in config.keys()):
+            if 'DATABASE_DRAG_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_DRAG_SUB
+        if ('CONFIG_AERO_FILENAME' in config.keys()):
+            if 'FLUID_BOUNDARY' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.FLUID_BOUNDARY_FILENAME
+        if ('CORRESPONDANCE_FILENAME' in config.keys()):
+            if 'CORRESPONDANCE' not in state.FILES:
+                raise Exception , 'Could not find dat file: %s' % config.CORRESPONDANCE_FILENAME
+        if ('CONFIG_AERO_FILENAME' in config.keys()):
+            if 'CONFIG_AERO' not in state.FILES:
+                raise Exception , 'Could not find config file: %s' % config.CONFIG_AERO_FILENAME
         
+
         self.config  = config      # base config
         self.state   = state       # base state
         self.files   = state.FILES # base files
+
+
+        if designs is None: designs = []
         self.designs = designs     # design list
+        if models is None: models = spaceutil.ordered_bunch()
+        self.models  = models      # model
+
         self.folder  = folder      # project folder
         self.results = spaceutil.ordered_bunch() # project design results
+
+
+
         
         # output filenames
         self.filename = 'project.pkl' 
         self.results_filename = 'results.pkl' 
         
+
+
+
         # initialize folder with files
-        pull,link = state.pullnlink(config)
+        pull,link = state.pullnlink(True,config)
         with redirect_folder(folder,pull,link,force=True):
         
             # look for existing designs
@@ -84,6 +114,11 @@ class Project(object):
             spaceio.save_data(self.filename,self)
             
         return
+
+
+
+
+
     
     def _eval(self,config,func,*args):
         """ evalautes a config, checking for existing designs
@@ -100,36 +135,42 @@ class Project(object):
         assert os.path.exists(folder) , 'cannot find project folder %s' % folder        
         
         # list project files to pull and link
-        pull,link = state.pullnlink(config)
+        pull,link = state.pullnlink(False,config)
         
         # project folder redirection, don't overwrite files
         with redirect_folder(folder,pull,link,force=False) as push:        
         
             # start design
-            design = self.new_design(konfig)
+            design_container = self.new_design_container(konfig)
             
             if config.get('CONSOLE','VERBOSE') == 'VERBOSE':
-                print os.path.join(self.folder,design.folder)
-            timestamp = design.state.tic()
-            
-            # run design+
-            proc = design._eval(func,*args)
-            # proc = Process(target=design._eval, args=(func,) + args)
-            # proc.start()
-            
-            # # check for update
-            # if design.state.toc(timestamp):
-                
-            #     # recompile design results
-            #     self.compile_results()
+                print os.path.join(self.folder,design_container.folder)
 
-            #     # save data
-            #     spaceio.save_data(filename,self)
+            if design_container.design is None:
+
+                #timestamp = design.state.tic()
+
+                # run design: initialize folder with files
+                pull,link = state.pullnlink(False,config)
+                with redirect_folder(design_container.folder,pull,link,force=True):
+
+                    config.dump('config_DSN.cfg')
+
+                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py -f ' + args[0]
+                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
                 
-            #: if updated
-            
-        #: with redirect folder
-        
+                # # check for update
+                # if design.state.toc(timestamp):
+                #     # recompile design results
+                #     self.compile_results()
+
+                # update data with new design_container (if subprocess is stopped, project will still know this design was ongoing)
+                spaceio.save_data(filename,self)
+
+            else:
+
+                proc = None
+
         # done, return output
         return proc
     
@@ -140,27 +181,27 @@ class Project(object):
         konfig.unpack_dvs(dvs)
         return konfig, dvs
     
+
+
+
+
     def func(self,func_name,config):
         func = spaceeval.func
         konfig = copy.deepcopy(config)
         return self._eval(konfig, func, func_name)
     
-    def grad(self,func_name,method,config):
-        func = spaceeval.grad
-        konfig = copy.deepcopy(config)
-        return self._eval(konfig, func, func_name,method)
-    
-    def user(self,user_func,config,*args):
-        raise NotImplementedError
-        #return self._eval(config, user_func,*args) 
-    
-    def add_design(self,config):
-        #func = spaceeval.touch # hack - TWL
-        func = spaceeval.skip 
-        konfig = copy.deepcopy(config)
-        return self._eval(konfig, func)
+
+
+
+
+
+
+
+
+
+
         
-    def new_design(self,config):
+    def new_design_container(self,config):
         """ finds an existing design for given config
             or starts a new design with a closest design 
             used for restart data
@@ -169,30 +210,25 @@ class Project(object):
         konfig = copy.deepcopy(config)
         
         # find closest design
-        closest,delta = self.closest_design(konfig)
+        # closest,delta = self.closest_design(konfig)
         # found existing design
 
-
         # IMPROVE
+        closest = None
         delta = 1e8
 
         if delta == 0.0 and closest:
-            design = closest
-        # start new design
+            design_container = closest
         else:
-            design = self.init_design(konfig,closest)
-        #: if new design    
+            # name new folder
+            folder = self._design_folder.replace('*',self._design_number)
+            folder = folder % (len(self.designs) + 1)
+            design_container = spaceutil.ordered_bunch()
+            design_container.folder = folder
+            design_container.design = None
+            self.designs.append(design_container)      
         
-        return design
-    
-    def get_design(self,config):
-        konfig = copy.deepcopy(config)
-        closest,delta = self.closest_design(konfig)
-        if delta == 0.0 and closest:
-            design = closest
-        else:
-            raise Exception, 'design not found for this config'
-        return design
+        return design_container
         
     def closest_design(self,config):
         """ looks for an existing or closest design 
@@ -207,8 +243,8 @@ class Project(object):
             return [] , inf
         
         diffs = []
-        for this_design in designs:
-            this_config = this_design.config
+        for this_design_container in designs:
+            this_config = this_design_container.design.config
             distance = config.dist(this_config,keys_check)
             diffs.append(distance) 
                         
@@ -220,47 +256,33 @@ class Project(object):
         closest = designs[i_min]
         
         return closest, delta 
-    
-    def init_design(self,config,closest=None):
-        """ starts a new design
-            works in project folder
+
+
+
+
+
+    def deep_compile(self):
+        """ Project.deep_compile()
+            recompiles project using design files saved in each design folder
         """
         
-        konfig = copy.deepcopy(config)
-        ztate  = copy.deepcopy(self.state)
-        if closest is None: closest = []
+        project_folder = self.folder
+        designs = self.designs
         
-        # use closest design as seed
-        if closest:
-            # copy useful state info
-            seed_folder = closest.folder
-            seed_files  = closest.files
-            for key in seed_files.keys():
-                # ignore mesh
-                if key == 'MESH': continue 
-                # build file path
-                name = seed_files[key]
-                name = os.path.join(seed_folder,name)
-                # update pull files
-                ztate.FILES[key] = name
+        with spaceio.redirect_folder(project_folder):
+            for design_container in designs:
+                if design_container.design is None:
+                    design_filename = os.path.join(design_container.folder,'design.pkl')
+                    if os.path.exists(design_filename):
+                        design_container.design = spaceio.load_data(design_filename)
             
-        # name new folder
-        folder = self._design_folder.replace('*',self._design_number)
-        folder = folder % (len(self.designs) + 1)
+            #self.compile_results()
+            spaceio.save_data(self.filename,self)
+            
+        return
 
-        # start new design (pulls files to folder)
-        design = spaceeval.Design(konfig,ztate,folder)
-        
-        # update local state filenames ( ??? why not in Design() )
-        for key in design.files:
-            name = design.files[key]
-            name = os.path.split(name)[-1]
-            design.files[key] = name
-        
-        # add design to project 
-        self.designs.append(design)        
-        
-        return design
+
+
     
     def compile_results(self,default=np.nan):
         """ results = SU2.opt.Project.compile_results(default=np.nan)
@@ -343,24 +365,7 @@ class Project(object):
             
         return self.results
     
-    def deep_compile(self):
-        """ Project.deep_compile()
-            recompiles project using design files saved in each design folder
-            useful if designs were run outside of project class
-        """
-        
-        project_folder = self.folder
-        designs = self.designs
-        
-        with spaceio.redirect_folder(project_folder):
-            for i_dsn,design in enumerate(designs):
-                design_filename = os.path.join(design.folder,design.filename)
-                self.designs[i_dsn] = spaceio.load_data(design_filename)
-            
-            self.compile_results()
-            spaceio.save_data(self.filename,self)
-            
-        return
+
         
     def save(self):
         with spaceio.redirect_folder(self.folder):

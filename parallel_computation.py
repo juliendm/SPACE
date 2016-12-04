@@ -20,7 +20,9 @@ def main():
     #state.find_files(config)
 
     # Project
-    project = SPACE.project.Project(config, state, None, 'GEOMETRY_DVS_BIS')
+    project = SPACE.project.Project(config, state, folder='GEOMETRY_DVS_BIS')
+    # project = SPACE.io.load_data('GEOMETRY_DVS_BIS/project.pkl')
+    # print project.designs[0].design
 
     konfig = copy.deepcopy(config)
 
@@ -96,7 +98,9 @@ def main():
     procs.append(project.func('STRUCTURE', konfig))
 
     for proc in procs:
-        proc.wait()
+        if not proc is None: proc.wait()
+
+    project.deep_compile()
 
 # -------------------------------------------------------------------
 #  Run Main Program

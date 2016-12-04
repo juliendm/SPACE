@@ -67,7 +67,8 @@ def structure(config):
 
 
     KSWeight = 80.0
-    SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','mf0'])]
+    evalFuncs = ['mass','ks0','mf0']
+    SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
     #SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
     numLoadCases = len(SPs)
 
@@ -155,39 +156,62 @@ def structure(config):
     # Load Factor
     FEASolver.setOption('gravityVector',gravityVector.tolist())
     for i in range(numLoadCases):
-       FEASolver.addInertialLoad(SPs[i])
+        FEASolver.addInertialLoad(SPs[i])
 
-
+    history_filename = 'history_structure.dat'
+    history_iteration = {'val':0}
 
     def obj(x):
-       '''Evaluate the objective and constraints'''
-       funcs = {}
-       FEASolver.setDesignVars(x)
-       for i in range(numLoadCases):
-           FEASolver(SPs[i])
-           FEASolver.evalFunctions(SPs[i], funcs)
-       if comm.rank == 0:
-           print funcs
-       return funcs, False
+        '''Evaluate the objective and constraints'''
+        funcs = {}
+        FEASolver.setDesignVars(x)
+        for i in range(numLoadCases):
+            FEASolver(SPs[i])
+            FEASolver.evalFunctions(SPs[i], funcs)
+        if comm.rank == 0:
+            history_file = open(history_filename,'a')
+            history_file.write('%d' % history_iteration['val'])
+            for key in funcs.keys():
+                history_file.write(',%.16f' % funcs[key])
+            history_file.write('\n')
+            history_file.close()
+            history_iteration['val'] += 1
+        return funcs, False
 
     def sens(x, funcs):
-       '''Evaluate the objective and constraint sensitivities'''
-       funcsSens = {}
-       for i in range(numLoadCases):
-           FEASolver.evalFunctionsSens(SPs[i], funcsSens)
-       return funcsSens, False
+        '''Evaluate the objective and constraint sensitivities'''
+        funcsSens = {}
+        for i in range(numLoadCases):
+            FEASolver.evalFunctionsSens(SPs[i], funcsSens)
+        return funcsSens, False
+
 
     # Set up the optimization problem
+
+    history_file = open(history_filename,'w')
+    history_file.write('VARIABLES = "Iteration"')
+
     optProb = Optimization('Mass min', obj)
-    optProb.addObj('lc0_mass')
+    obj_name = 'lc0_mass'
+    optProb.addObj(obj_name)
+    history_file.write(',"%s"' % obj_name)
     FEASolver.addVariablesPyOpt(optProb)
 
     for i in range(numLoadCases):
-       for j in xrange(1):
-           optProb.addCon('%s_ks%d'% (SPs[i].name, j), lower=1.0, upper=1.0)
-           #optProb.addCon('%s_mf%d'% (SPs[i].name, j), lower=1.0, upper=1.0)
+        for j in xrange(1):
+            con_name = '%s_ks%d'% (SPs[i].name, j)
+            optProb.addCon(con_name, lower=1.0, upper=1.0)
+            history_file.write(',"%s"' % con_name)
+            con_name = '%s_mf%d'% (SPs[i].name, j)
+            #optProb.addCon(con_name, lower=1.0, upper=1.0)
+            history_file.write(',"%s"' % con_name)
+
+    history_file.write('\n')
+    history_file.close()
+
+
     if comm.rank == 0:
-       print optProb
+        print optProb
     optProb.printSparsity()
 
     opt = OPT('snopt',options={
@@ -195,86 +219,11 @@ def structure(config):
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
         'Iterations limit':100000,
-        'Major iterations limit':3000,
+        'Major iterations limit':3,#3000,
         'Minor iterations limit':500,
         'Major step limit':2.0})
     sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
 
-
-
-
-
-    # # Optimize
-
-    # def obj(x):
-    #     '''Evaluate the objective and constraints'''
-    #     funcs = {}
-    #     FEASolver.setDesignVars(x)
-    #     for i in range(numLoadCases):
-    #         FEASolver(SPs[i])
-    #         FEASolver.evalFunctions(SPs[i], funcs)
-    #     if comm.rank == 0:
-    #         print funcs
-    #     f = funcs['lc0_mass']
-    #     g = []
-    #     g.append(funcs['lc0_ks0'])
-    #     #g.append(funcs['lc0_ks1'])
-    #     #g.append(funcs['lc0_ks2'])
-    #     fail = 0
-    #     return f, g, fail
-
-    # def sens(x, f, g):
-    #     '''Evaluate the objective and constraint sensitivities'''
-    #     funcsSens = {}
-        
-    #     x_cur = numpy.zeros(len(x))
-    #     FEASolver.structure.getDesignVars(x_cur)
-    #     if not numpy.array_equal(x_cur,x):
-    #         print 'need recompute'
-    #         FEASolver.setDesignVars(x)
-    #         for i in range(numLoadCases):
-    #             FEASolver(SPs[i])
-
-    #     for i in range(numLoadCases):
-    #         FEASolver.evalFunctionsSens(SPs[i], funcsSens)
-
-    #     df1 = funcsSens['lc0_mass'][FEASolver.varSet]
-
-    #     dg1 = []
-    #     dg1.append(funcsSens['lc0_ks0'][FEASolver.varSet])
-    #     #dg1.append(funcsSens['lc0_ks1'][FEASolver.varSet])
-    #     #dg1.append(funcsSens['lc0_ks2'][FEASolver.varSet])
-
-    #     df = [0.0]*len(df1)
-    #     for i in range(0,len(df1)):
-    #         df[i] = df1[i] # NEEDED ?????????????????
-
-    #     dg = numpy.zeros([len(dg1),len(dg1[0])])
-    #     for i in range(0,len(dg1[0])):
-    #         dg[0][i] = dg1[0][i]
-    #         #dg[1][i] = dg1[1][i]
-    #         #dg[2][i] = dg1[2][i]
-
-    #     fail = 0
-
-    #     return df, dg, fail
-
-
-    # optimize = True
-    # if optimize:
-
-    #     # Set up the optimization problem
-    #     optProb = Optimization('Mass min', obj)
-    #     optProb.addObj('lc0_mass')
-    #     FEASolver.addVariablesPyOpt(optProb)
-
-    #     for i in range(numLoadCases):
-    #         for j in xrange(1):   ###################################################
-    #             optProb.addCon('%s_ks%d'% (SPs[i].name, j), upper=1.0)
-
-    #     if comm.rank == 0:
-    #         print optProb
-    #     #optProb.printSparsity()
 
 
     #     # SNOPT
@@ -311,10 +260,10 @@ def structure(config):
 
 
 
-    # Getting the final solution
+    # # Getting the final solution
 
-    for i in range(numLoadCases):
-        FEASolver(SPs[i]) # NEEDED ?????????????????
+    # for i in range(numLoadCases):
+    #     FEASolver(SPs[i]) # NEEDED ?????????????????
 
 
 
@@ -328,9 +277,16 @@ def structure(config):
 
     #postprocess(config)
 
+
+    # get history and objectives
+    history      = spaceio.read_history( history_filename )
+    outputs      = spaceutil.ordered_bunch()
+    outputs.MASS = history[obj_name][-1]
+
     # info out
     info = spaceio.State(info)
-    #info.FILES.MASS = konfig.MASS
+    info.FUNCTIONS.update(outputs)
+
     return info
 
 #: def structure()

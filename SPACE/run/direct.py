@@ -35,14 +35,14 @@ def direct ( config ):
     history_filename = konfig['CONV_FILENAME'] + plot_extension
 
     # get history and objectives
-    history      = spaceio.read_history( history_filename )
+    #history      = spaceio.read_history( history_filename )
     aerodynamics = spaceio.read_aerodynamics( history_filename )
 
     # info out
     info = spaceio.State()
     info.FUNCTIONS.update( aerodynamics )
     info.FILES.DIRECT = konfig['RESTART_FLOW_FILENAME']
-    info.HISTORY.DIRECT = history
+    #info.HISTORY.DIRECT = history
 
     info.FILES.FLUID_SURFACE_FLOW = konfig.SURFACE_FLOW_FILENAME + '.dat'
     
