@@ -16,8 +16,13 @@ from warnings import warn, simplefilter
 
 inf = 1.0e20
 
-import subprocess
+
+#import subprocess
+#from multiprocessing import Process
+from mpi4py import MPI
 SPACE_RUN = os.environ['SPACE_RUN']
+
+
 
 # -------------------------------------------------------------------
 #  Project Class
@@ -154,10 +159,15 @@ class Project(object):
                 pull,link = state.pullnlink(False,config)
                 with redirect_folder(design_container.folder,pull,link,force=True):
 
-                    config.dump('config_DSN.cfg')
+                    konfig.dump('config_DSN.cfg')
 
-                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py -f ' + args[0]
-                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+                    # Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py -f ' + args[0]
+                    # proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+
+                    # proc = Process(target=spaceeval.eval_design, args=(args[0], config))
+                    # proc.start()
+
+                    comm = MPI.COMM_SELF.Spawn(sys.executable, args=[SPACE_RUN + '/SPACE/eval/design_interface.py',args[0]], maxprocs=1)
                 
                 # # check for update
                 # if design.state.toc(timestamp):
@@ -169,10 +179,10 @@ class Project(object):
 
             else:
 
-                proc = None
+                comm = None
 
         # done, return output
-        return proc
+        return comm
     
     def unpack_dvs(self,dvs):
         dvs = copy.deepcopy(dvs)
@@ -237,18 +247,17 @@ class Project(object):
                 
         designs = self.designs
         
-        keys_check = ['MACH_NUMBER','AoA','DV_VALUE_NEW']
+        keys_check = ['MACH_NUMBER','AoA','DV1','DV2','DV3']
         
         if not designs: 
             return [] , inf
         
         diffs = []
         for this_design_container in designs:
-            this_config = this_design_container.design.config
-            distance = config.dist(this_config,keys_check)
-            diffs.append(distance) 
-                        
-        #: for each design 
+            if not this_design_container.design is None:
+                this_config = this_design_container.design.config
+                distance = config.dist(this_config,keys_check)
+                diffs.append(distance)
         
         # pick closest design
         i_min = np.argmin(diffs)
@@ -261,8 +270,8 @@ class Project(object):
 
 
 
-    def deep_compile(self):
-        """ Project.deep_compile()
+    def compile_designs(self, force=False):
+        """
             recompiles project using design files saved in each design folder
         """
         
@@ -271,7 +280,7 @@ class Project(object):
         
         with spaceio.redirect_folder(project_folder):
             for design_container in designs:
-                if design_container.design is None:
+                if ((design_container.design is None) or force):
                     design_filename = os.path.join(design_container.folder,'design.pkl')
                     if os.path.exists(design_filename):
                         design_container.design = spaceio.load_data(design_filename)
@@ -281,9 +290,23 @@ class Project(object):
             
         return
 
-
+    def compile_models(self, force=False):
+        """
+            compile models
+        """
+            
+        return
 
     
+
+
+
+
+
+
+
+
+
     def compile_results(self,default=np.nan):
         """ results = SU2.opt.Project.compile_results(default=np.nan)
             builds a Bunch() of design results

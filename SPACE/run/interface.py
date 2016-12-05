@@ -61,6 +61,7 @@ def MIS(config):
 
     Command = MISSION_ANALYSIS_RUN + '/optimizer/bin/mission_analysis > optimizer.log'
     os.system(Command)
+    #subprocess.call(command, shell=True)
     
     return
 

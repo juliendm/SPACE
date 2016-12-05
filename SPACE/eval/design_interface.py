@@ -13,7 +13,7 @@ import subprocess
 
 SPACE_RUN = os.environ['SPACE_RUN']
 
-from optparse import OptionParser
+# from optparse import OptionParser
 sys.path.append(os.environ['SPACE_RUN'])
 import SPACE
 from SPACE import io   as spaceio
@@ -62,14 +62,14 @@ def init_design(config): # At this point, it is already determined that the desi
 if __name__ == '__main__':
     
     # Command Line Options
-    parser=OptionParser()
-    parser.add_option("-f", "--func",       dest="func_name",
-                      help="read function", metavar="FUNCTION_NAME")
+    # parser=OptionParser()
+    # parser.add_option("-f", "--func",       dest="func_name",
+    #                   help="read function", metavar="FUNCTION_NAME")
                       
-    (options, args)=parser.parse_args()
+    # (options, args)=parser.parse_args()
 
     config = spaceio.Config('config_DSN.cfg')
-    eval_design(options.func_name, config)
+    eval_design(sys.argv[1], config)
 
 
 
