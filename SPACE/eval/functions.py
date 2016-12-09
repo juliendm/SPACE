@@ -30,6 +30,8 @@ def function(func_name, config, state=None):
             aerodynamics(config, state)
         elif func_name == 'STRUCTURE': # MASS
             structure(config, state)
+        elif func_name == 'GEOMETRY':
+            geometry(config, state)
         else:
             raise Exception, 'unknown function name, %s' % func_name
     

@@ -14,7 +14,7 @@ import SPACE
 def main():
 
     # Project
-    project_folder = 'GEOMETRY_DVS_MPI'
+    project_folder = 'GEOMETRY_DVS_STL'
     if os.path.exists(project_folder):
         project = SPACE.io.load_data(project_folder + '/project.pkl')
         project.compile_designs()
@@ -29,79 +29,79 @@ def main():
 
     konfig = copy.deepcopy(config)
 
-    procs = []
+    comms = []
 
-    konfig.DV1 = '-0.5'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '-0.4'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '-0.3'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '-0.2'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '-0.1'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
     konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.1'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.2'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.3'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.4'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.5'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
+    comms.append(project.func('GEOMETRY', konfig))
+    # konfig.DV1 = '-0.4'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '-0.3'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '-0.2'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '-0.1'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.1'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.2'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.3'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.4'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.5'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
 
-    konfig.DV1 = '0.0'; konfig.DV2 = '-0.5'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '-0.4'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '-0.3'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '-0.2'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '-0.1'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.1'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.2'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.3'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.4'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.5'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '-0.5'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '-0.4'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '-0.3'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '-0.2'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '-0.1'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.1'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.2'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.3'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.4'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.5'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
 
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.5'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.4'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.3'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.2'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.1'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.1'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.2'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.3'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.4'
-    procs.append(project.func('STRUCTURE', konfig))
-    konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.5'
-    procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.5'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.4'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.3'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.2'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '-0.1'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.1'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.2'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.3'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.4'
+    # procs.append(project.func('STRUCTURE', konfig))
+    # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.5'
+    # procs.append(project.func('STRUCTURE', konfig))
 
-    for proc in procs:
-        if not proc is None: proc.Disconnect()
+    for comm in comms:
+        if not comm is None: comm.Disconnect()
 
     project.compile_designs()
 

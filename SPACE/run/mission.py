@@ -94,6 +94,8 @@ def mission ( config, lift_model, drag_model ):
     shutil.copy('externals/auxfiles/aero/CD0_a.dat', 'externals/auxfiles/aero/CD0_r.dat')
     shutil.copy('externals/auxfiles/aero/CL0_a.dat', 'externals/auxfiles/aero/CL0_r.dat')
 
+    os.mkdir('utils')
+    shutil.copy(MISSION_ANALYSIS_RUN + '/optimizer/utils/20140902_geoid_height.mat', 'utils/20140902_geoid_height.mat')
 
     # Run Solution
     SPACE_MIS(konfig)
