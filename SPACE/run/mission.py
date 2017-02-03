@@ -6,7 +6,8 @@
 
 import os, sys, shutil, copy
 
-from .. import io  as spaceio
+from .. import io    as spaceio
+from .. import util  as spaceutil
 
 from interface import MIS       as SPACE_MIS
 
@@ -26,7 +27,8 @@ def mission ( config, lift_model, drag_model ):
     dv2 = float(konfig.DV2)
     dv3 = float(konfig.DV3)
 
-    mass_dry = (1736.0 + dv1*(-202.22) + dv2*326.64 + dv3*134.31) * 2.0 + ( 1500.0 + 50.0 + 750.0 ) * 2.0 # engine, tanks, gnc
+    mass_dry = (1736.0) * 2.0 + ( 1500.0 + 50.0 + 750.0 ) * 2.0
+    #mass_dry = (1736.0 + dv1*(-202.22) + dv2*326.64 + dv3*134.31) * 2.0 + ( 1500.0 + 50.0 + 750.0 ) * 2.0 # engine, tanks, gnc
     mass_us = 6500.0
     mass_lox_kero = 24100.0
 
@@ -78,7 +80,8 @@ def mission ( config, lift_model, drag_model ):
 
     os.mkdir('externals/auxfiles/mass')
     mass_dry_file = open('externals/auxfiles/mass/mass_dry.dat','w')  
-    mass_dry_file.write('%f\n' % mass_dry)
+    #mass_dry_file.write('%f %f %f %f\n' % (0.0, 0.0, 0.0, mass_dry))
+    mass_dry_file.write('%f %f %f %f\n' % (dv1, dv2, dv3, mass_dry))
     mass_dry_file.close()
 
     os.mkdir('externals/auxfiles/spice')
@@ -101,10 +104,15 @@ def mission ( config, lift_model, drag_model ):
     SPACE_MIS(konfig)
 
 
+    # get history and objectives
+    history      = spaceio.read_history( 'output/output_soar.dat' )
+    outputs      = spaceutil.ordered_bunch()
+    outputs.SPEED_MECO = history['v'][-1]
+
+    print outputs.SPEED_MECO
+
     # info out
     info = spaceio.State()
-    # info.FUNCTIONS.update( aerodynamics )
-    # info.FILES.DIRECT = konfig['RESTART_FLOW_FILENAME']
-    # info.HISTORY.DIRECT = history
+    info.FUNCTIONS.update(outputs)
     
     return info

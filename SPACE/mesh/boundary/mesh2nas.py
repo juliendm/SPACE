@@ -37,7 +37,7 @@ def main():
 
     line = inp.readline()
     nPoint = int(line.split()[0])
-    line = inp.readline()
+ #   line = inp.readline()
 
     print nPoint
 
@@ -54,14 +54,14 @@ def main():
 
     line = inp.readline()
     nElem_Bound = int(line.split()[0])
-    line = inp.readline()
+#    line = inp.readline()
 
     print nElem_Bound
 
     for i in range(nElem_Bound):
         line = inp.readline()
         data = line.split()
-        out.write("CTRIA3,  " + str(i+1) + "," + "1" + "," + data[0] + "," + data[1] + "," + data[2] + ",,0.000000\n")
+        out.write("CTRIA3,  " + str(i+1) + "," + str(1) + "," + data[0] + "," + data[1] + "," + data[2] + ",,0.000000\n")
  
 #: def main()
 

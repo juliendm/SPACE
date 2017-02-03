@@ -17,9 +17,9 @@ from warnings import warn, simplefilter
 inf = 1.0e20
 
 
-#import subprocess
+import subprocess
 #from multiprocessing import Process
-from mpi4py import MPI
+#from mpi4py import MPI    ############## MUST NOT USE SHARED MEMORY: ALL EXE MUST BE COMPILED IN SERIAL
 SPACE_RUN = os.environ['SPACE_RUN']
 
 
@@ -68,11 +68,8 @@ class Project(object):
             if 'DATABASE_DRAG_SUB' not in state.FILES:
                 raise Exception , 'Could not find mesh file: %s' % config.DATABASE_DRAG_SUB
         if ('CONFIG_AERO_FILENAME' in config.keys()):
-            if 'FLUID_BOUNDARY' not in state.FILES:
-                raise Exception , 'Could not find mesh file: %s' % config.FLUID_BOUNDARY_FILENAME
-        if ('CORRESPONDANCE_FILENAME' in config.keys()):
-            if 'CORRESPONDANCE' not in state.FILES:
-                raise Exception , 'Could not find dat file: %s' % config.CORRESPONDANCE_FILENAME
+            if 'FARFIELD' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.FARFIELD_FILENAME
         if ('CONFIG_AERO_FILENAME' in config.keys()):
             if 'CONFIG_AERO' not in state.FILES:
                 raise Exception , 'Could not find config file: %s' % config.CONFIG_AERO_FILENAME
@@ -161,13 +158,13 @@ class Project(object):
 
                     konfig.dump('config_DSN.cfg')
 
-                    # Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py -f ' + args[0]
-                    # proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
+                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
 
                     # proc = Process(target=spaceeval.eval_design, args=(args[0], config))
                     # proc.start()
 
-                    comm = MPI.COMM_SELF.Spawn(sys.executable, args=[SPACE_RUN + '/SPACE/eval/design_interface.py',args[0]], maxprocs=1)
+                    #proc = MPI.COMM_SELF.Spawn(sys.executable, args=[SPACE_RUN + '/SPACE/eval/design_interface.py',args[0]], maxprocs=1)
                 
                 # # check for update
                 # if design.state.toc(timestamp):
@@ -179,10 +176,10 @@ class Project(object):
 
             else:
 
-                comm = None
+                proc = None
 
         # done, return output
-        return comm
+        return proc
     
     def unpack_dvs(self,dvs):
         dvs = copy.deepcopy(dvs)

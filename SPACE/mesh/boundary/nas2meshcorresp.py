@@ -91,9 +91,13 @@ def main():
     node_boundary_oml.sort(key = operator.itemgetter(0, 1, 2))
 
     correspondance = []
+    skip = 0
     for index in range(len(node_boundary_oml)):
-        if (abs(node_surface[index][0]-node_boundary_oml[index][0]) > 1e-3 or abs(node_surface[index][1]-node_boundary_oml[index][1]) > 1e-3 or abs(node_surface[index][2]-node_boundary_oml[index][2]) > 1e-3): print node_surface[index], node_boundary_oml[index]
-        correspondance.append([node_surface[index][3],node_boundary_oml[index][3]])
+        if (abs(node_surface[index-skip][0]-node_boundary_oml[index][0]) > 1e-3 or abs(node_surface[index-skip][1]-node_boundary_oml[index][1]) > 1e-3 or abs(node_surface[index-skip][2]-node_boundary_oml[index][2]) > 1e-3):
+            #print node_surface[index], node_boundary_oml[index+skip]
+            skip = skip+1
+        else:
+            correspondance.append([node_surface[index-skip][3],node_boundary_oml[index][3]])
     correspondance.sort(key = operator.itemgetter(0))
 
     # WRITE

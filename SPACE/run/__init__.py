@@ -6,6 +6,7 @@ from interface import  \
     MIS               ,\
     CFD               ,\
     GHS               ,\
+    MRG               ,\
     INT               ;
 
 from direct      import direct

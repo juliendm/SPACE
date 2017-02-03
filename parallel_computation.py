@@ -14,7 +14,7 @@ import SPACE
 def main():
 
     # Project
-    project_folder = 'GEOMETRY_DVS_STL'
+    project_folder = 'GEOMETRY_DVS_GEOM'
     if os.path.exists(project_folder):
         project = SPACE.io.load_data(project_folder + '/project.pkl')
         project.compile_designs()
@@ -29,10 +29,10 @@ def main():
 
     konfig = copy.deepcopy(config)
 
-    comms = []
+    procs = []
 
     konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
-    comms.append(project.func('GEOMETRY', konfig))
+    procs.append(project.func('AERODYNAMICS', konfig))
     # konfig.DV1 = '-0.4'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
     # procs.append(project.func('STRUCTURE', konfig))
     # konfig.DV1 = '-0.3'; konfig.DV2 = '0.0'; konfig.DV3 = '0.0'
@@ -100,8 +100,9 @@ def main():
     # konfig.DV1 = '0.0'; konfig.DV2 = '0.0'; konfig.DV3 = '0.5'
     # procs.append(project.func('STRUCTURE', konfig))
 
-    for comm in comms:
-        if not comm is None: comm.Disconnect()
+    for proc in procs:
+        #if not proc is None: proc.Disconnect()
+        if not proc is None: proc.wait()
 
     project.compile_designs()
 

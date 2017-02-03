@@ -32,7 +32,7 @@ def main():
 
     plt.figure(1)
 	
-    for i in range(n_slice):
+    for i in range(0,n_slice):
 	
         inp.readline()
         inp.readline()
@@ -96,7 +96,7 @@ def main():
         min_index = min(index_min_x,index_max_x)
         max_index = max(index_min_x,index_max_x)
 
-	X_u = np.zeros(max_index+1-min_index)
+        X_u = np.zeros(max_index+1-min_index)
         Y_u = np.zeros(max_index+1-min_index)
 
         X_l = np.zeros(length+2-len(X_u))
@@ -112,7 +112,7 @@ def main():
             X_l[k+length-max_index] = ordered_x[k]
             Y_l[k+length-max_index] = ordered_z[k]
 
-        if i == 0:
+        if i <= 2: # if i == 0:
             min_x = min([min(X_u),min(X_l)])
             min_y = 0.5*(Y_u[np.argmin(X_u)]+Y_l[np.argmin(X_l)])
 
@@ -184,7 +184,7 @@ def main():
 
 
 
-        profile = np.loadtxt('../GeoMACH-master/GeoMACH/PGM/airfoils/rae2822.dat')
+        profile = np.loadtxt('rae2822.dat')
         x_u = profile[0:65,0]
         x_l = profile[0:65,0]
         x_u = x_u*(np.max(X_u)-np.min(X_u))+np.min(X_u)
@@ -240,17 +240,17 @@ def main():
 #            y_l[index_l] = coeffs_l_l[0]*x_l[index_l]*x_l[index_l] + coeffs_l_l[1]*x_l[index_l] + coeffs_l_l[2]            
             y_l[index_r] = coeffs_l_r[0]*x_l[index_r]*x_l[index_r] + coeffs_l_r[1]*x_l[index_r] + coeffs_l_r[2]
 
-        out_file = 'profile_' + str(i+1) + '.dat'
-        out = open(out_file,"w")
-        for k in range(len(x_u)):
-            out.write(str(x_u[len(x_u)-1-k]) + ' ' + str(y_u[len(x_u)-1-k]) + '\n')
-        for k in range(1,len(x_l)):
-            out.write(str(x_l[k]) + ' ' + str(y_l[k]) + '\n')
-        out.close()
+        # out_file = 'profile_' + str(i+1) + '.dat'
+        # out = open(out_file,"w")
+        # for k in range(len(x_u)):
+        #     out.write(str(x_u[len(x_u)-1-k]) + ' ' + str(y_u[len(x_u)-1-k]) + '\n')
+        # for k in range(1,len(x_l)):
+        #     out.write(str(x_l[k]) + ' ' + str(y_l[k]) + '\n')
+        # out.close()
 
 
 
-        if i in [0,2,22,44]:
+        if i in [2,4,22,44]: # [0,2,22,44]
 
             plt.plot(x_u,y_u, '.', color='r', lw=2)
             plt.plot(x_l,y_l, '.', color='b', lw=2)

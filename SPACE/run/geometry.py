@@ -17,6 +17,7 @@ from scipy import interpolate
 import numpy as np
 
 from .. import io  as spaceio
+from interface import MRG       as SPACE_MRG
 
 SPACE_RUN = os.environ['SPACE_RUN']
 
@@ -56,6 +57,8 @@ def geometry ( config ):
     wing_width_section_2_ini = 2.41
     (pgm.wing_width_section_1, pgm.wing_width_section_2) = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),float(konfig.DV3),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF))
 
+    pgm.body_flap_deflection = float(konfig.BODY_FLAP_DEF)
+
     bse = pgm.initialize()
 
     pgm.comps['lwing'].set_airfoil('profile_1.dat')
@@ -68,7 +71,11 @@ def geometry ( config ):
 
     # bse.vec['pt_str']._hidden[:] = False
     bse.vec['pt_str'].export_MESH(konfig['FLUID_SURFACE'] + '.mesh')
-    bse.vec['pt_str'].export_tec_str()
+    # Add Back
+    SPACE_MRG(konfig)
+
+
+    # bse.vec['pt_str'].export_tec_str()
     # bse.vec['pt_str'].export_STL()
     bse.vec['cp_str'].export_IGES()
     if konfig['STRUCT'] != 'NONE': pgm.meshStructure(konfig['STRUCT'])
@@ -90,19 +97,19 @@ class Spaceplane(PGMconfiguration):
         this.comps['lwing'] = PGMwing(num_x=9, num_z=12, left_closed=True)
         this.comps['rwing'] = PGMwing(num_x=9, num_z=12, right_closed=True)
         this.comps['ctail'] = PGMwing(num_x=3, num_z=4, left_closed=True)
-        this.comps['flap'] = PGMwing(num_x=6, num_z=4, left_closed=True)
+        this.comps['flap'] = PGMwing(num_x=6, num_z=4, left_closed=False)
 
         this.comps['fuse_f'] = PGMcone(this, 'fuse', 'front', 7.0)
-        this.comps['fuse_r'] = PGMcone(this, 'fuse', 'rear', 0.0)
+        #this.comps['fuse_r'] = PGMcone(this, 'fuse', 'rear', 0.0)
         this.comps['lwing_t'] = PGMtip(this, 'lwing', 'left', 0.1)
         this.comps['rwing_t'] = PGMtip(this, 'rwing', 'right', 0.1)
         this.comps['ctail_t'] = PGMtip(this, 'ctail', 'left', 0.1)
-        this.comps['flap_t'] = PGMtip(this, 'flap', 'left', 0.1)
+        #this.comps['flap_t'] = PGMtip(this, 'flap', 'left', 0.1)
 
-        this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,1], 'lwing', 'right')
-        this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,2], 'rwing', 'left')
+        this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'bot', 'E', [0,1], 'lwing', 'right')
+        #this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,2], 'rwing', 'left')
         this.comps['ctail_fuse'] = PGMjunction(this, 'fuse', 'top', 'E', [3,9], 'ctail', 'right')
-        this.comps['flap_fuse'] = PGMjunction(this, 'fuse', 'bot', 'N', [0,0], 'flap', 'right')
+        this.comps['flap_fuse'] = PGMjunction(this, 'fuse', 'bot', 'S', [12,0], 'flap', 'right')
 
     def _define_params(this):
 
@@ -146,7 +153,7 @@ class Spaceplane(PGMconfiguration):
 
         # fuselage
 
-        fuse_length = 18.0
+        fuse_length = 18.0 # 18.0 #########################
         fuse_radius = 1.75
         fuse_bottom = 0.1
 
@@ -182,9 +189,9 @@ class Spaceplane(PGMconfiguration):
 
         # tails
 
-        tail_root_origin_x = 13.3
-        tail_tip_origin_x = 16.3
-        tail_length_root = 4.1
+        tail_root_origin_x = 13.3 - 0.3 ################
+        tail_tip_origin_x = 16.3 - 0.3 ################
+        tail_length_root = 4.1 - 0.2 ################
         tail_length_tip = 2.5
         tail_height = 3.8
 
@@ -198,31 +205,38 @@ class Spaceplane(PGMconfiguration):
 
         flap_origin_x = 16.2
         flap_origin_y = -1.85
-        flap_width = 3.0
-        flap_length = 2.5
+        flap_width = 3.5
+        flap_length = 2.0
 
-        flap_deflection = 0.0
+        flap_deflection = this.body_flap_deflection
 
         flap = this.comps['flap'].props
-        flap['pos'].params[''].val([flap_origin_x+nose_origin_x,flap_origin_y,flap_width/2.0])
+        flap['pos'].params[''].val([flap_origin_x+nose_origin_x,flap_origin_y,-flap_width/2.0])
         flap['pos'].params['lin'].val([[0,0,0],[flap_length * np.cos(-flap_deflection*np.pi/180.0), flap_length * np.sin(-flap_deflection*np.pi/180.0), 0]])
-        flap['scl'].params[''].val([[flap_width,2.0,1],[flap_width,1.5,1]])
-        flap['rot'].params[''].val([[0,90,0],[0,90,0]])
+        flap['scl'].params[''].val([[flap_width,2.0,1],[flap_width,0.3,1]])
+        flap['rot'].params[''].val([[180,90,0],[180,90,0]])
 
         return [], [], []
 
     def _set_bspline_options(this):
         comps = this.comps
 
-        #comps['fuse'].faces['rgt'].set_option('num_cp', 'u', [4,4,4,4,4,4])
+        # #comps['fuse'].faces['rgt'].set_option('num_cp', 'u', [4,4,4,4,4,4])
 
-        #comps['fuse'].faces['bot'].set_option('num_cp', 'v', [4,4,4,4,8,4,4,4,4,4,4,4,4,4])
-        #comps['fuse'].faces['bot'].set_option('num_pt', 'v', [16,16,16,16,32,16,16,16,16,16,16,16,16,16], both=True)
+        # #comps['fuse'].faces['bot'].set_option('num_cp', 'v', [4,4,4,4,8,4,4,4,4,4,4,4,4,4])
 
-        #comps['fuse'].faces['bot'].set_option('num_cp', 'u', [4,16,16,4])
+        # comps['fuse'].faces['bot'].set_option('num_pt', 'v', [8,10,15,10,5,5,5,5,5,10,10,8,8,8], both=False)
 
-        #comps['lwing'].faces['upp'].set_option('num_cp', 'v', [4,20,20,4])
-        #comps['rwing'].faces['upp'].set_option('num_cp', 'v', [4,20,20,4])
+        # comps['fuse'].faces['bot'].set_option('num_pt', 'u', [6,6,6,6,6,6,6,6], both=False)
+        # comps['fuse'].faces['lft'].set_option('num_pt', 'u', [6,6,6,6], both=False)
+
+        # #comps['fuse'].faces['bot'].set_option('num_cp', 'u', [4,16,16,4])
+
+        # comps['lwing'].faces['upp'].set_option('num_pt', 'v', [5,5,5,5,5,5,5,5,5,5,5,5], both=False)
+        # comps['rwing'].faces['upp'].set_option('num_pt', 'v', [5,5,5,5,5,5,5,5,5,5,5,5], both=False)
+
+        # comps['flap'].faces['upp'].set_option('num_pt', 'v', [6,6,6,6], both=False)
+        # #comps['flap_t'].faces[''].set_option('num_pt', 'u', [3,3,3,3], both=False)
 
 
     def meshStructure(this, filename):
@@ -307,9 +321,9 @@ def compute_wing_profiles(dv1, dv2, dv3, wing_width_section_1_ini, wing_width_se
     n_profiles_1 = 16
     n_profiles_2 = 19
 
-    scale_ini = 0.92
+    scale_ini = 0.97 # 0.92
 
-    x_hinge = 10.5 * scale_ini
+    x_hinge = 9.78 * scale_ini # 10.5 * scale_ini
     y_hinge = -0.3
 
     profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/edge_1.dat')
@@ -341,64 +355,79 @@ def compute_wing_profiles(dv1, dv2, dv3, wing_width_section_1_ini, wing_width_se
     y_u_edge[2,:] = profile[0:65,1]
     y_l_edge[2,:] = profile[65:130,1]
 
-
-    cutting_length = max(x_u_root)
-    cutting_index = 0
-    for k in range(len(x_u_edge[0,:])):
-        if (x_u_edge[0,k] > cutting_length) :
-            cutting_index = k
-            break
-
-    a_u = (y_u_edge[0,cutting_index-1]-y_u_edge[0,cutting_index])/(x_u_edge[0,cutting_index-1]-x_u_edge[0,cutting_index])
-    b_u = y_u_edge[0,cutting_index] - a_u*x_u_edge[0,cutting_index]
-    x_u_in_cut_ini = x_u_edge[0,0:cutting_index+1]
-    x_u_in_cut_ini[-1] = cutting_length
-    y_u_in_cut_ini = y_u_edge[0,0:cutting_index+1]
-    y_u_in_cut_ini[-1] = a_u*x_u_in_cut_ini[-1] + b_u 
-
-    a_l = (y_l_edge[0,cutting_index-1]-y_l_edge[0,cutting_index])/(x_l_edge[0,cutting_index-1]-x_l_edge[0,cutting_index])
-    b_l = y_l_edge[0,cutting_index] - a_l*x_l_edge[0,cutting_index]
-    x_l_in_cut_ini = x_l_edge[0,0:cutting_index+1]
-    x_l_in_cut_ini[-1] = cutting_length
-    y_l_in_cut_ini = y_l_edge[0,0:cutting_index+1]
-    y_l_in_cut_ini[-1] = a_l*x_l_in_cut_ini[-1] + b_l
-
     profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/rae2822.dat')
     x_canvas = profile[0:65,0]
 
-    x_u_in_cut = x_canvas*(np.max(x_u_in_cut_ini)-np.min(x_u_in_cut_ini))+np.min(x_u_in_cut_ini)
-    x_l_in_cut = x_canvas*(np.max(x_l_in_cut_ini)-np.min(x_l_in_cut_ini))+np.min(x_l_in_cut_ini)
-    x_u_in_cut[0] = x_u_in_cut_ini[0]
-    x_l_in_cut[0] = x_l_in_cut_ini[0]
-    x_u_in_cut[-1] = x_u_in_cut_ini[-1]
-    x_l_in_cut[-1] = x_l_in_cut_ini[-1]
 
-    f_u = interpolate.interp1d(x_u_in_cut_ini,y_u_in_cut_ini)
-    f_l = interpolate.interp1d(x_l_in_cut_ini,y_l_in_cut_ini)
-    y_u_in_cut = f_u(x_u_in_cut)
-    y_l_in_cut = f_l(x_l_in_cut)
 
-    n_smooth = 12
-    y_target = y_l_in_cut[-1]
-    a_u_r = np.array([[x_u_in_cut[-n_smooth]*x_u_in_cut[-n_smooth],x_u_in_cut[-n_smooth],1],[x_u_in_cut[-1]*x_u_in_cut[-1],x_u_in_cut[-1],1],[2.0*x_u_in_cut[-n_smooth],1,0]])
-    b_u_r = np.array([y_u_in_cut[-n_smooth],y_target,(y_u_in_cut[-n_smooth]-y_u_in_cut[-n_smooth-1])/(x_u_in_cut[-n_smooth]-x_u_in_cut[-n_smooth-1])])
-    coeffs_u_r = np.linalg.solve(a_u_r,b_u_r)
-    for ind in range(n_smooth):
-        index_r = -(ind+1)
-        y_u_in_cut[index_r] = coeffs_u_r[0]*x_u_in_cut[index_r]*x_u_in_cut[index_r] + coeffs_u_r[1]*x_u_in_cut[index_r] + coeffs_u_r[2]
+
+
+    # cutting_length = max(x_u_root)
+    # cutting_index = 0
+    # for k in range(len(x_u_edge[0,:])):
+    #     if (x_u_edge[0,k] > cutting_length) :
+    #         cutting_index = k
+    #         break
+
+    # a_u = (y_u_edge[0,cutting_index-1]-y_u_edge[0,cutting_index])/(x_u_edge[0,cutting_index-1]-x_u_edge[0,cutting_index])
+    # b_u = y_u_edge[0,cutting_index] - a_u*x_u_edge[0,cutting_index]
+    # x_u_in_cut_ini = x_u_edge[0,0:cutting_index+1]
+    # x_u_in_cut_ini[-1] = cutting_length
+    # y_u_in_cut_ini = y_u_edge[0,0:cutting_index+1]
+    # y_u_in_cut_ini[-1] = a_u*x_u_in_cut_ini[-1] + b_u 
+
+    # a_l = (y_l_edge[0,cutting_index-1]-y_l_edge[0,cutting_index])/(x_l_edge[0,cutting_index-1]-x_l_edge[0,cutting_index])
+    # b_l = y_l_edge[0,cutting_index] - a_l*x_l_edge[0,cutting_index]
+    # x_l_in_cut_ini = x_l_edge[0,0:cutting_index+1]
+    # x_l_in_cut_ini[-1] = cutting_length
+    # y_l_in_cut_ini = y_l_edge[0,0:cutting_index+1]
+    # y_l_in_cut_ini[-1] = a_l*x_l_in_cut_ini[-1] + b_l
+
+    # x_u_in_cut = x_canvas*(np.max(x_u_in_cut_ini)-np.min(x_u_in_cut_ini))+np.min(x_u_in_cut_ini)
+    # x_l_in_cut = x_canvas*(np.max(x_l_in_cut_ini)-np.min(x_l_in_cut_ini))+np.min(x_l_in_cut_ini)
+    # x_u_in_cut[0] = x_u_in_cut_ini[0]
+    # x_l_in_cut[0] = x_l_in_cut_ini[0]
+    # x_u_in_cut[-1] = x_u_in_cut_ini[-1]
+    # x_l_in_cut[-1] = x_l_in_cut_ini[-1]
+
+    # f_u = interpolate.interp1d(x_u_in_cut_ini,y_u_in_cut_ini)
+    # f_l = interpolate.interp1d(x_l_in_cut_ini,y_l_in_cut_ini)
+    # y_u_in_cut = f_u(x_u_in_cut)
+    # y_l_in_cut = f_l(x_l_in_cut)
+
+    # n_smooth = 12
+    # y_target = y_l_in_cut[-1]
+    # a_u_r = np.array([[x_u_in_cut[-n_smooth]*x_u_in_cut[-n_smooth],x_u_in_cut[-n_smooth],1],[x_u_in_cut[-1]*x_u_in_cut[-1],x_u_in_cut[-1],1],[2.0*x_u_in_cut[-n_smooth],1,0]])
+    # b_u_r = np.array([y_u_in_cut[-n_smooth],y_target,(y_u_in_cut[-n_smooth]-y_u_in_cut[-n_smooth-1])/(x_u_in_cut[-n_smooth]-x_u_in_cut[-n_smooth-1])])
+    # coeffs_u_r = np.linalg.solve(a_u_r,b_u_r)
+    # for ind in range(n_smooth):
+    #     index_r = -(ind+1)
+    #     y_u_in_cut[index_r] = coeffs_u_r[0]*x_u_in_cut[index_r]*x_u_in_cut[index_r] + coeffs_u_r[1]*x_u_in_cut[index_r] + coeffs_u_r[2]
+
+
+    x_u_in_cut = x_u_edge[0,:]
+    y_u_in_cut = y_u_edge[0,:]
+
+    x_l_in_cut = x_l_edge[0,:]
+    y_l_in_cut = y_l_edge[0,:]
+
+
 
     # Design Variables
 
     a_strake = (min(x_u_edge[1,:])-min(x_u_edge[0,:]))/wing_width_section_1_ini
     b_strake = min(x_u_edge[1,:])-a_strake*wing_width_section_1_ini
+    print a_strake, b_strake
 
     a_lead = (min(x_u_edge[2,:])-min(x_u_edge[1,:]))/wing_width_section_2_ini
     b_lead_ini = min(x_u_edge[1,:])-a_lead*wing_width_section_1_ini
     b_lead = b_lead_ini + dv1
+    print a_lead, b_lead_ini
 
     a_trail = (max(x_u_edge[2,:])-max(x_u_edge[1,:]))/wing_width_section_2_ini
     b_trail_ini = max(x_u_edge[1,:])-a_trail*wing_width_section_1_ini
     b_trail = b_trail_ini + dv2
+    print a_trail, b_trail_ini
 
     wing_width_ini = wing_width_section_1_ini + wing_width_section_2_ini
     wing_width = wing_width_ini + dv3

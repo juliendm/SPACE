@@ -130,8 +130,7 @@ class State(ordered_bunch):
         if ('DATABASE_LIFT_SUB' in config.keys()): register_file('DATABASE_LIFT_SUB',config.DATABASE_LIFT_SUB)
         if ('DATABASE_DRAG_SUB' in config.keys()): register_file('DATABASE_DRAG_SUB',config.DATABASE_DRAG_SUB)
 
-        if ('FLUID_BOUNDARY_FILENAME' in config.keys()): register_file('FLUID_BOUNDARY',config.FLUID_BOUNDARY_FILENAME)
-        if ('CORRESPONDANCE_FILENAME' in config.keys()): register_file('CORRESPONDANCE',config.CORRESPONDANCE_FILENAME)
+        if ('FARFIELD_FILENAME' in config.keys()): register_file('FARFIELD',config.FARFIELD_FILENAME)
         if ('CONFIG_AERO_FILENAME' in config.keys()):    register_file('CONFIG_AERO',config.CONFIG_AERO_FILENAME)
         
         return

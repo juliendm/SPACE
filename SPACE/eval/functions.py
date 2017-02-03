@@ -314,10 +314,8 @@ def fluid_mesh(config, state=None):
     
     # initialize
     state = spaceio.State(state)
-    if not state.FILES.has_key('FLUID_BOUNDARY'):
-        state.FILES.FLUID_BOUNDARY = config['FLUID_BOUNDARY_FILENAME']
-    if not state.FILES.has_key('CORRESPONDANCE'):
-        state.FILES.CORRESPONDANCE = config['CORRESPONDANCE_FILENAME']
+    if not state.FILES.has_key('FARFIELD'):
+        state.FILES.FARFIELD = config['FARFIELD_FILENAME']
     
     # console output
     log_fluid_mesh = 'log_fluid_mesh.out'
@@ -327,7 +325,7 @@ def fluid_mesh(config, state=None):
     # ----------------------------------------------------    
     
     # redundancy check
-    fluid_mesh_done = all([state.FILES.has_key(key) for key in ['FLUID_BOUNDARY_UPDATED','FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']])
+    fluid_mesh_done = all([state.FILES.has_key(key) for key in ['FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']])
 
     if not fluid_mesh_done:
 
@@ -336,9 +334,7 @@ def fluid_mesh(config, state=None):
         pull = []; link = []
         
         # files: mesh
-        name = files.FLUID_BOUNDARY
-        link.append(name)
-        name = files.CORRESPONDANCE
+        name = files.FARFIELD
         link.append(name)
         name = files.FLUID_SURFACE_MESH
         link.append(name)
@@ -357,7 +353,7 @@ def fluid_mesh(config, state=None):
 
     # # return output 
     # fluid = spaceutil.ordered_bunch()
-    # for key in ['FLUID_BOUNDARY_UPDATED','FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']:
+    # for key in [FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']:
     #     if state.FILES.has_key(key):
     #         fluid[key] = state.FILES[key]
 

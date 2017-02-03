@@ -19,6 +19,8 @@ sys.path.append( BIN_PATH )
 SU2_RUN = os.environ['SU2_RUN'] 
 sys.path.append( SU2_RUN )
 
+SPACE_RUN = os.environ['SPACE_RUN']
+
 MISSION_ANALYSIS_RUN = os.environ['MISSION_ANALYSIS_RUN'] 
 sys.path.append( MISSION_ANALYSIS_RUN )
 
@@ -106,8 +108,18 @@ def GHS(config):
     
     return
 
-def INT(config):
+def MRG(config):
     """ run GHS
+        partitions set by config.NUMBER_PART
+    """
+    konfig = copy.deepcopy(config)
+    
+    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig['FLUID_SURFACE'] + '.mesh ' + SPACE_RUN + '/SPACE/util/back/back.mesh -out ' + konfig['FLUID_SURFACE'] + '.mesh > log_mrg.out 2>&1')
+
+    return
+
+def INT(config):
+    """ run INT
         partitions set by config.NUMBER_PART
     """
     konfig = copy.deepcopy(config)

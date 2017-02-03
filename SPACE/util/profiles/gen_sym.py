@@ -14,14 +14,14 @@ def main():
     
     plt.figure(1)
 	
-    profile = np.loadtxt('../GeoMACH-master/GeoMACH/PGM/airfoils/rae2822.dat')
+    profile = np.loadtxt('rae2822.dat')
     x_u = profile[0:65,0]
     x_l = profile[0:65,0]
 
-    y_u = 0.05*np.ones(len(x_u))
+    y_u = -0.05*np.ones(len(x_u))
 
-    n_smooth = 18
-    y_target = 0
+    n_smooth = 15
+    y_target = 0.05
     a_u_l = np.array([[x_u[n_smooth-1]*x_u[n_smooth-1],x_u[n_smooth-1],1],[x_u[0]*x_u[0],x_u[0],1],[2.0*x_u[n_smooth-1],1,0]])
     b_u_l = np.array([y_u[n_smooth-1],y_target,(y_u[n_smooth-1]-y_u[n_smooth])/(x_u[n_smooth-1]-x_u[n_smooth])])
     a_u_r = np.array([[x_u[-n_smooth]*x_u[-n_smooth],x_u[-n_smooth],1],[x_u[-1]*x_u[-1],x_u[-1],1],[2.0*x_u[-n_smooth],1,0]])
@@ -34,7 +34,13 @@ def main():
         index_r = -(ind+1)
         y_u[index_r] = coeffs_u_r[0]*x_u[index_r]*x_u[index_r] + coeffs_u_r[1]*x_u[index_r] + coeffs_u_r[2]
 
-    y_l = -y_u 
+
+    # y_l = y_u 
+    # y_u = 0.05*np.ones(len(x_u))
+
+    y_l = -0.05*np.ones(len(x_u))
+    y_u = -y_u
+
 
     out_file = 'profile_cs.dat'
     out = open(out_file,"w")

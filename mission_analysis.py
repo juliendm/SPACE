@@ -3,6 +3,8 @@
 import time, os, gc, sys, shutil, copy, math
 import numpy as np
 
+from optparse import OptionParser
+
 sys.path.append(os.environ['SPACE_RUN'])
 import SPACE
 
@@ -12,39 +14,43 @@ import SPACE
 #  Main 
 # -------------------------------------------------------------------
 
-def main():
-
-    # Config
-    config = SPACE.io.Config('config.cfg')
-    # State
-    state  = SPACE.io.State()
-    #state.find_files(config)
+def main(compute):
 
     # Project
-    project = SPACE.project.Project(config, state, folder='MAX_VEL_DVS_LHC')
+    project_folder = 'MAX_VEL_DV3'
+    if os.path.exists(project_folder):
+        project = SPACE.io.load_data(project_folder + '/project.pkl')
+        project.compile_designs(force=True)
+        config = project.config
+    else:
+        config = SPACE.io.Config('config.cfg')
+        state  = SPACE.io.State()
+        project = SPACE.project.Project(config, state, folder=project_folder)
 
-    konfig = copy.deepcopy(config)
+    print '%d design(s) so far' % len(project.designs)
 
-    XB = np.array([[-0.5, 0.5],[-0.5, 0.5],[-0.5, 0.5]])
-    dvs = LHC_unif(XB,60) #np.linspace(-0.5,0.5,num=30)
+    if compute:
 
-    print dvs
+        konfig = copy.deepcopy(config)
 
-    comms = []
-    for index in range(0,5):
-        konfig.DV1 = str(dvs[index][0]); konfig.DV2 = str(dvs[index][1]); konfig.DV3 = str(dvs[index][2])
-        comms.append(project.func('MISSION', konfig))
-    for comm in comms:
-        if not comm is None: comm.Disconnect()
+        #XB = np.array([[-0.5, 0.5],[-0.5, 0.5],[-0.5, 0.5]]) # LHC_unif(XB,60)
+        dvs = np.linspace(-0.1,0.5,num=12)
 
-    # comms = []
-    # for index in range(5,10):
-    #     konfig.DV1 = str(dvs[index][0]); konfig.DV2 = str(dvs[index][1]); konfig.DV3 = str(dvs[index][2])
-    #     comms.append(project.func('MISSION', konfig))
-    # for comm in comms:
-    #     if not comm is None: comm.Disconnect()
+        comms = []
+        for index in range(len(dvs)):
+            konfig.DV1 = str(0.0); konfig.DV2 = str(dvs[index]); konfig.DV3 = str(0.0) #dvs[index][2]
+            comms.append(project.func('MISSION', konfig))
+        for comm in comms:
+            if not comm is None: comm.Disconnect()
 
-    project.compile_designs()
+        project.compile_designs()
+
+    else:
+
+        for index in range(len(project.designs)):
+            design = project.designs[index].design
+            if "SPEED_MECO" in design.state.FUNCTIONS.keys():
+                print design.config.DV1, design.config.DV2, design.config.DV3, design.state.FUNCTIONS.SPEED_MECO
 
 #: main()
 
@@ -127,4 +133,13 @@ def VecDist(X,P=None):
 
 # this is only accessed if running from command prompt
 if __name__=='__main__':
-    main()
+
+    # Command Line Options
+    parser=OptionParser()
+    parser.add_option("-c", "--compute",    dest="compute",    default="True",
+                      help="COMPUTE direct and adjoint problem", metavar="COMPUTE")
+                      
+    (options, args)=parser.parse_args()
+    options.compute     = options.compute.upper() == 'TRUE'
+
+    main(options.compute)
