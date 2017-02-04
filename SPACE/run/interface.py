@@ -7,7 +7,7 @@
 import os, sys, shutil, copy
 import subprocess
 from ..io import Config
-from ..util import which
+from ..util import which, mesh2tri, tri2mesh
 
 # ------------------------------------------------------------
 #  Setup
@@ -80,41 +80,65 @@ def CFD(config):
     
     return
 
-def GHS(config):
-    """ run GHS
+def SUR(config):
+    """ run SUR
         partitions set by config.NUMBER_PART
     """
     konfig = copy.deepcopy(config)
     
-    tempname = 'config_GHS.cfg'
-    konfig.dump(tempname)
-    
-    # must run with rank 1
-    #processes = konfig['NUMBER_PART']
-    #processes = min([1,processes])
-    processes = 1
+    yams = open(konfig.FLUID_SURFACE + '.yams',"w")
+    yams.write('Absolute\nGradation 1.3\nMinSize 0.01\nMaxsize 0.2\nGeomApp 0.001\n')
+    yams.close()
 
-    in_file = konfig.FLUID_BOUNDARY_FILENAME.split('.')
-    in_file = in_file[0] + '_updated.' + in_file[1]
+    os.system('yams2 -f -O -1 -in ' + konfig.FLUID_SURFACE + '.mesh -out ' + konfig.FLUID_SURFACE + '.mesh > log_yams.out')
+
+    return
+
+def SYM(config):
+    """ run SYM
+        partitions set by config.NUMBER_PART
+    """
+    konfig = copy.deepcopy(config)
     
-    the_Command = 'ghs3d -O 1 -in ' + in_file + ' -out ' + konfig.FLUID_VOLUME + '.meshb > log_ghs.out'
-    # the_Command = build_command( the_Command , processes )
-    # run_command( the_Command )
-    os.system(the_Command)
+    mesh2tri(konfig)
+    os.system('triangle -p ' + konfig.FLUID_SURFACE + '.poly > log_tri.out')
+    tri2mesh(konfig)
+    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig.FLUID_SURFACE + '.mesh ' + konfig.FARFIELD_FILENAME + ' ' + konfig.SYMMETRY_FILENAME + ' -out ' + konfig.BOUNDARY_FILENAME + ' >> log_spider.out 2>&1')
+
+    return
+
+def VOL(config):
+    """ run VOL
+        partitions set by config.NUMBER_PART
+    """
+    konfig = copy.deepcopy(config)
     
+    adap_surf = open('adap.surf',"w")
+    adap_surf.write('3    1\n\n')
+    adap_surf.close()
+
+    adap_source = open('adap.source',"w")
+    adap_source.write('volume boundingbox  -2 20  -1  8  -5 7 h 0.2\n')
+    adap_source.close()
+
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 2.0 -out ' + konfig.BOUNDARY_FILENAME + ' > log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.05 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.05 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('ghs3d -O 1 -in ' + konfig.BOUNDARY_FILENAME + ' -out ' + konfig.FLUID_VOLUME + '.meshb > log_ghs.out 2>&1')
+    os.system('amg -in ' + konfig.FLUID_VOLUME + '.meshb -hgrad 1.05 -source adap.source -out ' + konfig.FLUID_VOLUME + '.meshb >> log_amg.out 2>&1')
+
     os.system('meshutils -O 3 -in ' + konfig.FLUID_VOLUME + '.meshb -out ' + konfig.FLUID_VOLUME + ' > log_meshutil.out')
 
-    #os.remove(tempname)
-    
     return
 
 def MRG(config):
-    """ run GHS
+    """ run MRG
         partitions set by config.NUMBER_PART
     """
     konfig = copy.deepcopy(config)
     
-    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig['FLUID_SURFACE'] + '.mesh ' + SPACE_RUN + '/SPACE/util/back/back.mesh -out ' + konfig['FLUID_SURFACE'] + '.mesh > log_mrg.out 2>&1')
+    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig.FLUID_SURFACE + '.mesh ' + SPACE_RUN + '/SPACE/util/back/back.mesh -out ' + konfig.FLUID_SURFACE + '.mesh > log_mrg.out 2>&1')
+    os.system('spider2 -O 1 -in ' + konfig.FLUID_SURFACE + '.mesh -Tri -Ref -from 1:1:10000 -to 1 -out ' + konfig.FLUID_SURFACE + '.mesh -f -f64 > log_spider.out 2>&1')
 
     return
 

@@ -18,32 +18,13 @@ import numpy as np
 
 from .. import io  as spaceio
 from interface import MRG       as SPACE_MRG
+from interface import SUR       as SPACE_SUR
 
 SPACE_RUN = os.environ['SPACE_RUN']
 
 # ----------------------------------------------------------------------
 #  Geometry Simulation
 # ----------------------------------------------------------------------
-
-# def geometry ( config ): 
-    
-#     # local copy
-#     konfig = copy.deepcopy(config)
-
-#     print 'Hey hey hey'
-
-#     os.system('python2.7 ' + SPACE_RUN + '/SPACE/run/geometry_exe.py > log_geom.out')
-
-#     print 'os sys'
-
-#     # info out
-#     info = spaceio.State()
-#     info.FILES.FLUID_SURFACE_MESH = konfig['FLUID_SURFACE'] + '.mesh'
-#     if konfig['STRUCT'] != 'NONE':
-#         info.FILES.STRUCT_BDF = konfig['STRUCT'] + '.bdf'
-#         info.FILES.STRUCT_MESH = konfig['STRUCT'] + '.mesh'
-#         info.FILES.STRUCT_SURFACE_MESH = konfig['STRUCT'] + '_surface.mesh'
-#     return info
 
 def geometry ( config ): 
     
@@ -73,7 +54,8 @@ def geometry ( config ):
     bse.vec['pt_str'].export_MESH(konfig['FLUID_SURFACE'] + '.mesh')
     # Add Back
     SPACE_MRG(konfig)
-
+    # Redo mesh
+    SPACE_SUR(konfig)
 
     # bse.vec['pt_str'].export_tec_str()
     # bse.vec['pt_str'].export_STL()

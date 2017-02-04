@@ -2,18 +2,17 @@
 
 import os, time, sys, shutil
 import numpy as np
-from optparse import OptionParser
 
 # -------------------------------------------------------------------
 #  Main 
 # -------------------------------------------------------------------
 
-def main():
+def mesh2tri(config):
 
     # Input
 
-    nodes_baseline, elems_baseline = read_mesh('fluid_surface.d.mesh')
-    nodes_farfield, elems_farfield = read_mesh('farfield.mesh')
+    nodes_baseline, elems_baseline = read_mesh(config.FLUID_SURFACE + '.mesh')
+    nodes_farfield, elems_farfield = read_mesh(config.FARFIELD_FILENAME)
 
     # Process
 
@@ -22,7 +21,7 @@ def main():
 
     # Output
 
-    out = open('fluid_surface.poly',"w")
+    out = open(config.FLUID_SURFACE + '.poly',"w")
 
     index = 0
     out.write('%d %d %d %d\n' % (len(sym_nodes_baseline)+3*len(sym_nodes_farfield), 2, 0, 1))
@@ -76,7 +75,6 @@ def read_mesh(filename):
         data = line.split()
         nodes.append([float(data[0]), float(data[1]), float(data[2])])
         line = inp.readline()
-    #line = inp.readline()
     while line[0] != 'T':
         line = inp.readline()
     line = inp.readline()
@@ -115,10 +113,49 @@ def process(nodes, elems):
 
     return edges, sym_nodes
 
-# -------------------------------------------------------------------
-#  Run Main Program
-# -------------------------------------------------------------------
+def tri2mesh(config):
 
-# this is only accessed if running from command prompt
-if __name__ == '__main__':
-    main()
+    nodes = open(config.FLUID_SURFACE + '.1.node')
+    elems = open(config.FLUID_SURFACE + '.1.ele')
+    out = open(config.SYMMETRY_FILENAME,"w")
+
+    out.write("\nMeshVersionFormatted \n2\n")
+    out.write("\nDimension \n3\n")
+
+    # Points
+
+    out.write("\nVertices\n")
+
+    nPoint = int(nodes.readline().split()[0])
+    print nPoint
+
+    out.write(str(nPoint))
+    out.write("\n\n")
+
+    for index in range(nPoint):
+        data = nodes.readline().split()
+        out.write(data[1] + ' 0.0 ' + data[2] + ' 0\n')
+
+    # Elements
+
+    out.write("\nTriangles\n")
+
+    nElem_Bound = int(elems.readline().split()[0])
+    print nElem_Bound
+
+    out.write(str(nElem_Bound))
+    out.write("\n\n")
+
+    for index in range(nElem_Bound):
+        data = elems.readline().split()
+        out.write(data[1] + ' ' + data[2] + ' ' + data[3] + ' 3\n')
+
+    out.write("\n\n")
+    out.write("End\n")
+
+    nodes.close()
+    elems.close()
+    out.close()
+
+#: def boundary()
+
