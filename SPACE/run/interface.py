@@ -76,8 +76,52 @@ def CFD(config):
     tempname = 'config_CFD.cfg'
     konfig.dump(tempname)
 
-    os.system('SU2_CFD config_CFD.cfg > log_cfd.out') # ONLY WORKS WITH A SERIAL COMPILED SU2
+    #os.system('SU2_CFD config_CFD.cfg > log_cfd.out') # ONLY WORKS WITH A SERIAL COMPILED SU2
+
+    processes = int(konfig['NUMBER_PART'])
+    the_Command = 'SU2_CFD ' + tempname
+    the_Command = build_command( the_Command , processes )
+    run_command( the_Command )
     
+    return
+
+def SOL(config):
+    """ run SOL
+      partitions set by config.NUMBER_PART
+    """
+  
+    konfig = copy.deepcopy(config)
+    
+    tempname = 'config_SOL.cfg'
+    konfig.dump(tempname)
+
+    processes = int(konfig['NUMBER_PART'])
+    the_Command = 'SU2_SOL ' + tempname
+    the_Command = build_command( the_Command , processes )
+    run_command( the_Command )
+    
+    return
+
+def AMG(config):
+    
+    # adap_surf = open('adap.surf',"w")
+    # adap_surf.write('\n')
+    # adap_surf.close()
+
+    adap_surf = open('adap.surf',"w")
+    adap_surf.write('1    -1\n')
+    adap_surf.write('2    1\n')
+    adap_surf.write('3    1\n\n')
+    adap_surf.close()
+
+    adap_source = open('adap.source',"w")
+    adap_source.write('\n')
+    adap_source.close()
+    
+    Command = 'amg -in fluid_volume.meshb -sol mach.solb -source adap.source -p 2 -c 160000 -hgrad 1.3 -hmin 0.00001 -hmax 70 -out current.new.meshb -itp restart_flow.solb -back boundary_back.mesh -nordg > log_amg.out'
+    
+    os.system(Command);
+
     return
 
 def SUR(config):
@@ -86,11 +130,15 @@ def SUR(config):
     """
     konfig = copy.deepcopy(config)
     
-    yams = open(konfig.FLUID_SURFACE + '.yams',"w")
-    yams.write('Absolute\nGradation 1.3\nMinSize 0.01\nMaxsize 0.2\nGeomApp 0.001\n')
+    yams = open(konfig.FLUID_SURFACE + '_back.yams',"w")
+    #yams.write('Absolute\nGradation 1.1\nMinSize 0.01\nMaxsize 0.2\nGeomApp 0.001\n')
+    yams.write('Absolute\nGradation 1.3\nMinSize 0.01\nMaxsize 0.25\nGeomApp 0.005\n')
     yams.close()
 
-    os.system('yams2 -f -O -1 -in ' + konfig.FLUID_SURFACE + '.mesh -out ' + konfig.FLUID_SURFACE + '.mesh > log_yams.out')
+    #os.system('yams2 -f -O -1 -in ' + konfig.FLUID_SURFACE + '_back.mesh -out ' + konfig.FLUID_SURFACE + '.mesh > log_yams.out')
+    
+    #os.system('yams2 -f -O 0 -in ' + konfig.FLUID_SURFACE + '.mesh -out ' + konfig.FLUID_SURFACE + '.mesh >> log_yams.out')
+    shutil.copy(konfig.FLUID_SURFACE + '_back.mesh', konfig.FLUID_SURFACE + '.mesh')
 
     return
 
@@ -101,9 +149,9 @@ def SYM(config):
     konfig = copy.deepcopy(config)
     
     mesh2tri(konfig)
-    os.system('triangle -p ' + konfig.FLUID_SURFACE + '.poly > log_tri.out')
+    os.system('triangle -p ' + konfig.FLUID_SURFACE_CUR + '.poly > log_tri.out')
     tri2mesh(konfig)
-    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig.FLUID_SURFACE + '.mesh ' + konfig.FARFIELD_FILENAME + ' ' + konfig.SYMMETRY_FILENAME + ' -out ' + konfig.BOUNDARY_FILENAME + ' >> log_spider.out 2>&1')
+    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig.FLUID_SURFACE_CUR + '.mesh ' + konfig.FARFIELD_FILENAME + ' ' + konfig.SYMMETRY_FILENAME + ' -out ' + konfig.BOUNDARY_FILENAME + ' >> log_spider.out 2>&1')
 
     return
 
@@ -118,16 +166,49 @@ def VOL(config):
     adap_surf.close()
 
     adap_source = open('adap.source',"w")
-    adap_source.write('volume boundingbox  -2 20  -1  8  -5 7 h 0.2\n')
+    #adap_source.write('volume boundingbox  -4 20  -1  8  -6 7 h 0.2\n')
+    #adap_source.write('volume boundingbox  -9 25  -1  13  -11 12 h 0.8\n')z
+    adap_source.write('volume boundingbox  -2.0 18.5  -1  2.5  -3.2  2.5 h 0.2\n')
+    adap_source.write('volume boundingbox   2.0 15.5  -1  4.0  -3.2 -0.3 h 0.2\n')
+    adap_source.write('volume boundingbox   8.5 15.5  -1  6.5  -3.2 -0.3 h 0.2\n')
     adap_source.close()
 
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 2.0 -out ' + konfig.BOUNDARY_FILENAME + ' > log_amg.out 2>&1')
-    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.05 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
-    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.05 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
     os.system('ghs3d -O 1 -in ' + konfig.BOUNDARY_FILENAME + ' -out ' + konfig.FLUID_VOLUME + '.meshb > log_ghs.out 2>&1')
-    os.system('amg -in ' + konfig.FLUID_VOLUME + '.meshb -hgrad 1.05 -source adap.source -out ' + konfig.FLUID_VOLUME + '.meshb >> log_amg.out 2>&1')
+    # -grad 1.03 
+    os.system('amg -in ' + konfig.FLUID_VOLUME + '.meshb -hgrad 1.1 -source adap.source -out ' + konfig.FLUID_VOLUME + '.meshb >> log_amg.out 2>&1')
 
-    os.system('meshutils -O 3 -in ' + konfig.FLUID_VOLUME + '.meshb -out ' + konfig.FLUID_VOLUME + ' > log_meshutil.out')
+    return
+
+def BLG(config):
+    """ run BLG
+        partitions set by config.NUMBER_PART
+    """
+    konfig = copy.deepcopy(config)
+    
+    bloom = open(konfig.FLUID_VOLUME + '.bloom',"w")
+
+    bloom.write('BLReference\n1\n1\n\n')
+    bloom.write('BLSymmetryReference\n1\n3\n\n')
+    bloom.write('BLImprintReference\n1\n3\n\n')
+
+    bloom.write('InitialSpacing\n' + konfig.INITIAL_SPACING + '\n\n')
+    bloom.write('GrowthRate\n1.3\n\n')
+
+    bloom.write('BLThickness\n0.2\n\n')
+    #bloom.write('NumberOfLayers\n50\n\n')
+
+    #bloom.write('TurbulentBoundaryLayer\n\n')
+    #bloom.write('MixedElementsBoundaryLayer\n\n')
+
+    bloom.write('MeshDeformationReference\n1\n0\n\n')
+
+    bloom.close()
+
+    os.system('bloom -in ' + konfig.FLUID_VOLUME + '.meshb -out ' + konfig.FLUID_VOLUME + ' > log_bloom.out 2>&1')
 
     return
 
@@ -137,8 +218,8 @@ def MRG(config):
     """
     konfig = copy.deepcopy(config)
     
-    os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig.FLUID_SURFACE + '.mesh ' + SPACE_RUN + '/SPACE/util/back/back.mesh -out ' + konfig.FLUID_SURFACE + '.mesh > log_mrg.out 2>&1')
-    os.system('spider2 -O 1 -in ' + konfig.FLUID_SURFACE + '.mesh -Tri -Ref -from 1:1:10000 -to 1 -out ' + konfig.FLUID_SURFACE + '.mesh -f -f64 > log_spider.out 2>&1')
+    #os.system('spider2 -O 6 -f -f64 -eps 0.0001 -in ' + konfig.FLUID_SURFACE + '_back.mesh ' + SPACE_RUN + '/SPACE/util/back/back.mesh -out ' + konfig.FLUID_SURFACE + '_back.mesh > log_mrg.out 2>&1')
+    os.system('spider2 -O 1 -in ' + konfig.FLUID_SURFACE + '_back.mesh -Tri -Ref -from 1:1:10000 -to 1 -out ' + konfig.FLUID_SURFACE + '_back.mesh -f -f64 > log_spider.out 2>&1')
 
     return
 

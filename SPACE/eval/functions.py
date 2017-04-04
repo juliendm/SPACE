@@ -111,6 +111,22 @@ def mission(config, state=None):
 # ----------------------------------------------------------------------
 
 def aerodynamics(config, state=None):
+
+    if float(config.MACH_NUMBER) > 1.0:
+
+        config.MGLEVEL= '0'
+        config.MGCYCLE= 'W_CYCLE'
+        config.CFL_NUMBER= '3.0'
+        config.EXT_ITER= '1'
+        config.INITIAL_SPACING = '1e-4'
+
+    else:
+        
+        config.MGLEVEL= '3'
+        config.MGCYCLE= 'W_CYCLE'
+        config.CFL_NUMBER= '5.0'
+        config.EXT_ITER= '1'
+        config.INITIAL_SPACING = '1e-4'
     
     # ----------------------------------------------------
     #  Initialize    
@@ -143,8 +159,11 @@ def aerodynamics(config, state=None):
         config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
         config_aero.MESH_FILENAME = config.FLUID_VOLUME + '.su2'
         config_aero.SURFACE_FLOW_FILENAME = config.FLUID_SURFACE_FLOW
+
         config_aero.MACH_NUMBER = config.MACH_NUMBER
+        config_aero.REYNOLDS_NUMBER = config.REYNOLDS_NUMBER
         config_aero.AoA = config.AoA
+
         config_aero.SIDESLIP_ANGLE = config.SIDESLIP_ANGLE
         config_aero.REF_ORIGIN_MOMENT_X = config.REF_ORIGIN_MOMENT_X
         config_aero.REF_ORIGIN_MOMENT_Y = config.REF_ORIGIN_MOMENT_Y
@@ -152,11 +171,20 @@ def aerodynamics(config, state=None):
         config_aero.REF_LENGTH_MOMENT = config.REF_LENGTH_MOMENT
         config_aero.REF_AREA = config.REF_AREA
 
+        config_aero.MGLEVEL = config.MGLEVEL
+        config_aero.MGCYCLE = config.MGCYCLE
+        config_aero.CFL_NUMBER = config.CFL_NUMBER
+        config_aero.EXT_ITER = config.EXT_ITER
+        config_aero.NUMBER_PART = int(config.NUMBER_PART)
+
         files = state.FILES
         pull = []; link = []
         
         # files: mesh
-        name = files.FLUID_VOLUME_SU2
+        name = files.FLUID_VOLUME_MESH
+        #name = files.FLUID_VOLUME_SU2
+        link.append(name)
+        name = files.BOUNDARY_BACK_MESH
         link.append(name)
 
         # output redirection
@@ -266,7 +294,7 @@ def geometry(config, state=None):
     # ----------------------------------------------------    
     
     # redundancy check
-    geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH'] ] )
+    geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
 
     if not geometry_done:
 
@@ -285,6 +313,7 @@ def geometry(config, state=None):
                 # direct files to push
                 name = info.FILES['FLUID_SURFACE_MESH']
                 push.extend([name])
+                push.append(info.FILES['FLUID_SURFACE_BACK_MESH'])
                 if 'STRUCT_SURFACE_MESH' in info.FILES:
                     push.append(info.FILES['STRUCT_SURFACE_MESH'])
                 if 'STRUCT_BDF' in info.FILES:
@@ -294,7 +323,7 @@ def geometry(config, state=None):
 
     # # return output 
     # geo = spaceutil.ordered_bunch()
-    # for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH']:
+    # for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH']:
     #     if state.FILES.has_key(key):
     #         geo[key] = state.FILES[key]
 
@@ -325,7 +354,7 @@ def fluid_mesh(config, state=None):
     # ----------------------------------------------------    
     
     # redundancy check
-    fluid_mesh_done = all([state.FILES.has_key(key) for key in ['FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']])
+    fluid_mesh_done = all([state.FILES.has_key(key) for key in ['FLUID_VOLUME_MESH','BOUNDARY_BACK_MESH']])
 
     if not fluid_mesh_done:
 
@@ -338,6 +367,8 @@ def fluid_mesh(config, state=None):
         link.append(name)
         name = files.FLUID_SURFACE_MESH
         link.append(name)
+        name = files.FLUID_SURFACE_BACK_MESH
+        link.append(name)
         
         # output redirection
         with redirect_folder('FLUID_MESH', pull, link) as push:
@@ -348,12 +379,13 @@ def fluid_mesh(config, state=None):
                 state.update(info)
 
                 # direct files to push
-                name = info.FILES['FLUID_VOLUME_SU2']
+                name = info.FILES['FLUID_VOLUME_MESH']
                 push.extend([name])
+                push.append(info.FILES['BOUNDARY_BACK_MESH'])
 
     # # return output 
     # fluid = spaceutil.ordered_bunch()
-    # for key in [FLUID_VOLUME_MESH','FLUID_VOLUME_SU2']:
+    # for key in [FLUID_VOLUME_MESH']:
     #     if state.FILES.has_key(key):
     #         fluid[key] = state.FILES[key]
 

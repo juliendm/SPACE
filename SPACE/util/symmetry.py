@@ -11,7 +11,7 @@ def mesh2tri(config):
 
     # Input
 
-    nodes_baseline, elems_baseline = read_mesh(config.FLUID_SURFACE + '.mesh')
+    nodes_baseline, elems_baseline = read_mesh(config.FLUID_SURFACE_CUR + '.mesh')
     nodes_farfield, elems_farfield = read_mesh(config.FARFIELD_FILENAME)
 
     # Process
@@ -21,7 +21,7 @@ def mesh2tri(config):
 
     # Output
 
-    out = open(config.FLUID_SURFACE + '.poly',"w")
+    out = open(config.FLUID_SURFACE_CUR + '.poly',"w")
 
     index = 0
     out.write('%d %d %d %d\n' % (len(sym_nodes_baseline)+3*len(sym_nodes_farfield), 2, 0, 1))
@@ -115,8 +115,8 @@ def process(nodes, elems):
 
 def tri2mesh(config):
 
-    nodes = open(config.FLUID_SURFACE + '.1.node')
-    elems = open(config.FLUID_SURFACE + '.1.ele')
+    nodes = open(config.FLUID_SURFACE_CUR + '.1.node')
+    elems = open(config.FLUID_SURFACE_CUR + '.1.ele')
     out = open(config.SYMMETRY_FILENAME,"w")
 
     out.write("\nMeshVersionFormatted \n2\n")

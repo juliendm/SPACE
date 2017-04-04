@@ -7,6 +7,7 @@
 import os, sys, shutil, copy
 
 from .. import io  as spaceio
+from merge     import merge     as spacemerge
 from interface import CFD       as SPACE_CFD
 
 # ----------------------------------------------------------------------
@@ -27,7 +28,7 @@ def direct ( config ):
 
     # merge
     konfig['SOLUTION_FLOW_FILENAME'] = konfig['RESTART_FLOW_FILENAME']
-
+    spacemerge(konfig)
     
     # filenames
     plot_format      = konfig['OUTPUT_FORMAT']
