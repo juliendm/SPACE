@@ -177,9 +177,9 @@ def VOL(config):
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
-    os.system('ghs3d -O 1 -in ' + konfig.BOUNDARY_FILENAME + ' -out ' + konfig.FLUID_VOLUME + '.meshb > log_ghs.out 2>&1')
+    os.system('ghs3d -O 1 -in ' + konfig.BOUNDARY_FILENAME + ' -out ' + konfig.FLUID_VOLUME + '_euler.meshb > log_ghs.out 2>&1')
     # -grad 1.03 
-    os.system('amg -in ' + konfig.FLUID_VOLUME + '.meshb -hgrad 1.1 -source adap.source -out ' + konfig.FLUID_VOLUME + '.meshb >> log_amg.out 2>&1')
+    os.system('amg -in ' + konfig.FLUID_VOLUME + '_euler.meshb -hgrad 1.1 -source adap.source -out ' + konfig.FLUID_VOLUME + '_euler.meshb >> log_amg.out 2>&1')
 
     return
 
@@ -189,7 +189,7 @@ def BLG(config):
     """
     konfig = copy.deepcopy(config)
     
-    bloom = open(konfig.FLUID_VOLUME + '.bloom',"w")
+    bloom = open(konfig.FLUID_VOLUME + '_euler.bloom',"w")
 
     bloom.write('BLReference\n1\n1\n\n')
     bloom.write('BLSymmetryReference\n1\n3\n\n')
@@ -202,13 +202,13 @@ def BLG(config):
     #bloom.write('NumberOfLayers\n50\n\n')
 
     #bloom.write('TurbulentBoundaryLayer\n\n')
-    #bloom.write('MixedElementsBoundaryLayer\n\n')
+    bloom.write('MixedElementsBoundaryLayer\n\n')
 
     bloom.write('MeshDeformationReference\n1\n0\n\n')
 
     bloom.close()
 
-    os.system('bloom -in ' + konfig.FLUID_VOLUME + '.meshb -out ' + konfig.FLUID_VOLUME + ' > log_bloom.out 2>&1')
+    os.system('bloom -in ' + konfig.FLUID_VOLUME + '_euler.meshb -out ' + konfig.FLUID_VOLUME + ' > log_bloom.out 2>&1')
 
     return
 

@@ -110,23 +110,40 @@ def mission(config, state=None):
 #  Aerodynamics Function
 # ----------------------------------------------------------------------
 
+
+
 def aerodynamics(config, state=None):
 
-    if float(config.MACH_NUMBER) > 1.0:
+    config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
 
-        config.MGLEVEL= '0'
-        config.MGCYCLE= 'W_CYCLE'
-        config.CFL_NUMBER= '3.0'
-        config.EXT_ITER= '1'
-        config.INITIAL_SPACING = '1e-4'
+    config.INITIAL_SPACING = str(initial_spacing(config, config_aero))
+
+    Mach = float(config.MACH_NUMBER)
+
+    if Mach > 1.0:
+
+        config_aero.MGLEVEL= '0'
+        config_aero.MGCYCLE= 'W_CYCLE'
+        config_aero.EXT_ITER= '1000'
+
+        if Mach < 2.0:                           # 1.0 - 2.0
+            config_aero.CFL_NUMBER= '4.0'
+        elif Mach < 3.0 :                        # 2.0 - 3.0
+            config_aero.CFL_NUMBER= '3.5'
+        elif Mach < 5.0:                         # 3.0 - 5.0
+            config_aero.CFL_NUMBER= '3.5'
+        elif Mach < 8.0:                         # 5.0 - 8.0
+            config_aero.CFL_NUMBER= '2.5'
+        else:                                    # >= 8.0
+            config_aero.CFL_NUMBER= '2.0'
+
 
     else:
         
-        config.MGLEVEL= '3'
-        config.MGCYCLE= 'W_CYCLE'
-        config.CFL_NUMBER= '5.0'
-        config.EXT_ITER= '1'
-        config.INITIAL_SPACING = '1e-4'
+        config_aero.MGLEVEL= '3'
+        config_aero.MGCYCLE= 'W_CYCLE'
+        config_aero.CFL_NUMBER= '5.0'
+        config_aero.EXT_ITER= '1000'
     
     # ----------------------------------------------------
     #  Initialize    
@@ -156,7 +173,6 @@ def aerodynamics(config, state=None):
     direct_done = all([state.FUNCTIONS.has_key(key) for key in spaceio.optnames_aero[:9]])
     if not direct_done:
     
-        config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
         config_aero.MESH_FILENAME = config.FLUID_VOLUME + '.su2'
         config_aero.SURFACE_FLOW_FILENAME = config.FLUID_SURFACE_FLOW
 
@@ -171,10 +187,6 @@ def aerodynamics(config, state=None):
         config_aero.REF_LENGTH_MOMENT = config.REF_LENGTH_MOMENT
         config_aero.REF_AREA = config.REF_AREA
 
-        config_aero.MGLEVEL = config.MGLEVEL
-        config_aero.MGCYCLE = config.MGCYCLE
-        config_aero.CFL_NUMBER = config.CFL_NUMBER
-        config_aero.EXT_ITER = config.EXT_ITER
         config_aero.NUMBER_PART = int(config.NUMBER_PART)
 
         files = state.FILES
@@ -392,3 +404,25 @@ def fluid_mesh(config, state=None):
     # return fluid
 
 #: def fluid_mesh()
+
+def initial_spacing(config, config_aero, yplus=1, BL='turb'):
+
+    Re = float(config.REYNOLDS_NUMBER)
+    Ma = float(config.MACH_NUMBER)
+
+    c = (float(config_aero.GAMMA_VALUE) * float(config_aero.GAS_CONSTANT) * float(config_aero.FREESTREAM_TEMPERATURE))**0.5
+    mu = float(config_aero.MU_REF) * (float(config_aero.FREESTREAM_TEMPERATURE)/float(config_aero.MU_T_REF))**(3.0/2.0) * (float(config_aero.MU_T_REF) + float(config_aero.SUTHERLAND_CONSTANT))/(float(config_aero.FREESTREAM_TEMPERATURE) + float(config_aero.SUTHERLAND_CONSTANT))
+    u = Ma*c
+    rho = (Re * mu) / (u * float(config_aero.REYNOLDS_LENGTH))
+
+    if (BL=='turb'):
+        Cf = 0.026 / (Re)**(1.0/7.0)
+    else:
+        Cf = 0.664 / (Re**0.5)
+
+    tau_w = (Cf * rho * u**2) / 2.0
+    u_fric = (tau_w / rho)**0.5
+
+    return (yplus * mu) / (u_fric * rho)
+
+

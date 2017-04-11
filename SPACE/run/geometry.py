@@ -92,7 +92,7 @@ class Spaceplane(PGMconfiguration):
         this.comps['lwing_t'] = PGMtip(this, 'lwing', 'left', 0.1)
         this.comps['rwing_t'] = PGMtip(this, 'rwing', 'right', 0.1)
         #this.comps['ctail_t'] = PGMtip(this, 'ctail', 'left', 3.0)
-        this.comps['flap_t'] = PGMtip(this, 'flap', 'left', 0.1)
+      #  this.comps['flap_t'] = PGMtip(this, 'flap', 'left', 0.1)
 
         #this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'bot', 'E', [0,1], 'lwing', 'right')
         this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,1], 'lwing', 'right')
@@ -214,22 +214,17 @@ class Spaceplane(PGMconfiguration):
     def _set_bspline_options(this):
         comps = this.comps
 
-        # #comps['fuse'].faces['rgt'].set_option('num_cp', 'u', [4,4,4,4,4,4])
-
-        # #comps['fuse'].faces['bot'].set_option('num_cp', 'v', [4,4,4,4,8,4,4,4,4,4,4,4,4,4])
-
         comps['fuse'].faces['bot'].set_option('num_pt', 'v', [8,10,15,10,6,6,6,6,6,6,6,6,6,6], both=False)
 
         comps['fuse'].faces['bot'].set_option('num_pt', 'u', [5,5,5,5,5,5,5,5], both=False)
         comps['fuse'].faces['lft'].set_option('num_pt', 'u', [6,6,6,8], both=False)
 
-        # #comps['fuse'].faces['bot'].set_option('num_cp', 'u', [4,16,16,4])
+        #comps['lwing'].faces['upp'].set_option('num_pt', 'v', [3,3,3,4,4,4,5,5,5,5,5,5], both=False)
+        comps['lwing'].faces['upp'].set_option('num_pt', 'v', [4,4,4,4,4,4,5,5,5,5,5,5], both=False)
 
-        comps['lwing'].faces['upp'].set_option('num_pt', 'v', [3,3,3,4,4,4,5,5,5,5,5,5], both=False)
         # comps['rwing'].faces['upp'].set_option('num_pt', 'v', [5,5,5,5,5,5,5,5,5,5,5,5], both=False)
 
         comps['flap'].faces['upp'].set_option('num_pt', 'v', [6,6,6,6], both=False)
-        # #comps['flap_t'].faces[''].set_option('num_pt', 'u', [3,3,3,3], both=False)
 
 
     def meshStructure(this, filename):
