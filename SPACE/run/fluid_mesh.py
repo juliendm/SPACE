@@ -28,13 +28,17 @@ def fluid_mesh ( config ):
     konfig.SYMMETRY_FILENAME = 'symmetry.mesh'
     konfig.BOUNDARY_FILENAME = 'boundary.mesh'
     konfig.FLUID_SURFACE_CUR = konfig.FLUID_SURFACE
-    
+
     SPACE_SYM(konfig)
-    SPACE_VOL(konfig)
-    SPACE_BLG(konfig)
+
+    for index in range(3):
+
+        SPACE_VOL(konfig)
+        SPACE_BLG(konfig)
+
+        if os.path.exists(konfig.FLUID_VOLUME + '.meshb'): break
 
     os.system('meshutils -O 3 -in ' + konfig.FLUID_VOLUME + '.meshb -out ' + konfig.FLUID_VOLUME + ' > log_meshutil.out')
-
 
     # Back Mesh
 

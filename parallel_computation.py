@@ -25,7 +25,7 @@ def main():
     options.partitions  = int( options.partitions )
 
     # Project
-    project_folder = 'RESPONSE_SURFACE_DV'
+    project_folder = 'RESPONSE_SURFACE_DV_SUP'
     if os.path.exists(project_folder):
         project = SPACE.io.load_data(project_folder + '/project.pkl')
         project.compile_designs()
@@ -62,7 +62,7 @@ def main():
 
         XB = np.array([
 
-            [1.1, 8.0],        # dv_mach
+            [0.3, 0.95],        # dv_mach
             [-1.0, 1.0],       # dv_re
             [-1.0, 1.0],       # dv_aoa
 
@@ -87,33 +87,36 @@ def main():
 
     else:
 
-        X = np.loadtxt('dvs.dat', delimiter=', ', comments='# ')
+        X = np.loadtxt('dvs_sup.dat', delimiter=', ', comments='# ')
 
+        for index in range(len(X)):
 
-        
+            dvs = X[index]
 
-    for dvs in X:
+            dv_mach = dvs[0]
+            dv_re = dvs[1]
+            dv_aoa = dvs[2]
+            dv_bf = dvs[3]
+            dv_el = dvs[4]
+            dv_geo1 = dvs[5]
+            dv_geo2 = dvs[6]
+            dv_geo3 = dvs[7]
+            dv_geo4 = dvs[8]
+            dv_geo5 = dvs[9]
+            dv_geo6 = dvs[10]
 
-        dv_mach = dvs[0]
-        dv_re = dvs[1]
-        dv_aoa = dvs[2]
-        dv_bf = dvs[3]
-        dv_el = dvs[4]
-        dv_geo1 = dvs[5]
-        dv_geo2 = dvs[6]
-        dv_geo3 = dvs[7]
-        dv_geo4 = dvs[8]
-        dv_geo5 = dvs[9]
-        dv_geo6 = dvs[10]
+            Reynolds = 10.0**(-3.0/8.0*dv_mach+7.0+dv_re)
 
-        Reynolds = 10.0**(-3.0/8.0*dv_mach+7.0+dv_re)
-        AoA = 3.92857*dv_mach+3.57143+dv_aoa*(1.78571*dv_mach+5.71429) # Supersonic
+            if dv_mach >= 1.0:
+                AoA = 3.92857*dv_mach+3.57143+dv_aoa*(1.78571*dv_mach+5.71429) # Supersonic
+            else:
+                AoA = (dv_aoa+1.0)*7.5 # Subsonic
 
-        konfig.DV1 = str(dv_geo1); konfig.DV2 = str(dv_geo2); konfig.DV3 = str(dv_geo3); konfig.DV4 = str(dv_geo4); konfig.DV5 = str(dv_geo5); konfig.DV6 = str(dv_geo6)
-        konfig.ELEVON_DEF = str(dv_el*180.0/np.pi); konfig.BODY_FLAP_DEF = str(dv_bf*180.0/np.pi)
-        konfig.MACH_NUMBER = str(dv_mach); konfig.REYNOLDS_NUMBER = str(Reynolds); konfig.AoA= str(AoA)
-        proc = project.func('AERODYNAMICS', konfig)
-        proc.wait()
+            konfig.DV1 = str(dv_geo1); konfig.DV2 = str(dv_geo2); konfig.DV3 = str(dv_geo3); konfig.DV4 = str(dv_geo4); konfig.DV5 = str(dv_geo5); konfig.DV6 = str(dv_geo6)
+            konfig.ELEVON_DEF = str(dv_el*180.0/np.pi); konfig.BODY_FLAP_DEF = str(dv_bf*180.0/np.pi)
+            konfig.MACH_NUMBER = str(dv_mach); konfig.REYNOLDS_NUMBER = str(Reynolds); konfig.AoA= str(AoA)
+            proc = project.func('AERODYNAMICS', konfig)
+            proc.wait()
 
 
 

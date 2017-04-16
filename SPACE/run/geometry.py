@@ -65,16 +65,16 @@ def geometry ( config ):
     # bse.vec['pt_str'].export_STL()
     # bse.vec['cp_str'].export_IGES()
     
-    # if konfig.STRUCT != 'NONE': pgm.meshStructure(konfig.STRUCT)
+    if konfig.STRUCT != 'NONE': pgm.meshStructure(konfig.STRUCT)
 
     # info out
     info = spaceio.State()
     info.FILES.FLUID_SURFACE_MESH = konfig.FLUID_SURFACE + '.mesh'
     info.FILES.FLUID_SURFACE_BACK_MESH = konfig.FLUID_SURFACE + '_back.mesh'
-    # if konfig.STRUCT != 'NONE':
-    #     info.FILES.STRUCT_BDF = konfig.STRUCT + '.bdf'
-    #     info.FILES.STRUCT_MESH = konfig.STRUCT + '.mesh'
-    #     info.FILES.STRUCT_SURFACE_MESH = konfig.STRUCT + '_surface.mesh'
+    if konfig.STRUCT != 'NONE':
+        info.FILES.STRUCT_BDF = konfig.STRUCT + '.bdf'
+        info.FILES.STRUCT_MESH = konfig.STRUCT + '.mesh'
+        info.FILES.STRUCT_SURFACE_MESH = konfig.STRUCT + '_surface.mesh'
     return info
 
 class Spaceplane(PGMconfiguration):
@@ -275,14 +275,14 @@ class Spaceplane(PGMconfiguration):
         #     for j in range(jdims.shape[0]-1):
         #         afm.addVertFlip('MSPARV:%02d:%02d' % (i,j),'ctail',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
 
-        # idims = np.linspace(0.15,0.85,4)
-        # jdims = np.linspace(0,0.9,8)
-        # for i in range(idims.shape[0]-1):
-        #     for j in range(jdims.shape[0]):
-        #         afm.addVertFlip('MRIBF:%02d:%02d' % (j,i),'flap',[idims[i],jdims[j]],[idims[i+1],jdims[j]])
-        # for i in range(idims.shape[0]):
-        #     for j in range(jdims.shape[0]-1):
-        #         afm.addVertFlip('MSPARF:%02d:%02d' % (i,j),'flap',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
+        idims = np.linspace(0.15,0.85,4)
+        jdims = np.linspace(0.0,1.0,8)
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]):
+                afm.addVertFlip('MRIBF:%02d:%02d' % (j,i),'flap',[idims[i],jdims[j]],[idims[i+1],jdims[j]])
+        for i in range(idims.shape[0]):
+            for j in range(jdims.shape[0]-1):
+                afm.addVertFlip('MSPARF:%02d:%02d' % (i,j),'flap',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
 
         idims = np.linspace(0,1,4) #6
         jdims = np.linspace(0,1,13) # 25
@@ -414,7 +414,7 @@ def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_wid
 
     a_trail = (max(x_u_edge[2,:])-max(x_u_edge[1,:]))/wing_width_section_2_ini
     b_trail_ini = max(x_u_edge[1,:])-a_trail*wing_width_section_1_ini
-    b_trail = b_trail_ini + dv2
+    b_trail = b_trail_ini + dv2 + dv4 # !!!!!!!!!!!!!!!!!!!!!!!!
     print a_trail, b_trail_ini
 
     wing_width_ini = wing_width_section_1_ini + wing_width_section_2_ini

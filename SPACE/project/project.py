@@ -264,28 +264,57 @@ class Project(object):
         return closest, delta 
 
 
-
-
-
-    def compile_designs(self, force=False):
+    def compile_designs(self, force=False, update_name=False):
         """
             recompiles project using design files saved in each design folder
         """
         
         project_folder = self.folder
         designs = self.designs
-        
+
         with spaceio.redirect_folder(project_folder):
             for design_container in designs:
                 if ((design_container.design is None) or force):
                     design_filename = os.path.join(design_container.folder,'design.pkl')
                     if os.path.exists(design_filename):
-                        design_container.design = spaceio.load_data(design_filename)
+                        design = spaceio.load_data(design_filename)
+                        if update_name:
+                            design.folder = design_container.folder.split('/')[-1]
+                            spaceio.save_data(design_filename,design)
+                        design_container.design = design
             
             #self.compile_results()
             spaceio.save_data(self.filename,self)
             
         return
+
+    def fresh_compile_designs(self, project_folder=None):
+        """
+            recompiles project using design files saved in each design folder
+        """
+        
+        if not project_folder is None:
+            self.folder = project_folder
+        else:
+            project_folder = self.folder
+
+        self.designs = []
+
+        ls_dsn = glob.glob(project_folder + '/DESIGNS/*')
+        ls_dsn.sort()
+
+        for dsn in ls_dsn:
+            print dsn
+            design_container = spaceutil.ordered_bunch()
+            design_container.folder = 'DESIGNS/' + dsn.split('/')[-1]
+            design_container.design = None
+            self.designs.append(design_container)      
+
+        self.compile_designs(update_name=True)
+
+        return
+
+
 
     def compile_models(self, force=False):
         """

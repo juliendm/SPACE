@@ -30,10 +30,14 @@ def eval_design(func_name, config):
     """ interface for async jobs
     """
 
-    design = init_design(config)
-    save_data(design.filename,design)
-    design.func(func_name)
+    design_filename = 'design.pkl'
+    if os.path.exists(design_filename):
+        design = spaceio.load_data(design_filename)
+    else:
+        design = init_design(config)
+        save_data(design.filename,design)
 
+    design.func(func_name)
 
 def init_design(config): # At this point, it is already determined that the design don't already exists
     """ starts a new design

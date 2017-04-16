@@ -41,7 +41,7 @@ def structure(config):
     konfig = copy.deepcopy(config)
 
     # Load
-    spaceutil.surf2pressuresol(konfig)
+    spaceutil.surf2sol(konfig)
     SPACE_INT(konfig)
     info = spaceload(konfig)
 

@@ -18,115 +18,9 @@ def load(config):
     # local copy
     konfig = copy.deepcopy(config)
 
-    # Read bdf
-    bdf = open(konfig.STRUCT + '.bdf')
-    coord_bdf = []
-    elem_bdf = []
-    elem_tag_bdf = []
-    descriptions = {}
-    for line in bdf:
-        data = line.split()
-        if (line[0]=="$" and len(data) == 3):
-            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
-        elif (line[0]=="G" and len(data) == 6):
-            vec = [float(data[3]), float(data[4].strip('*'))]
-        elif (line[0]=="*" and len(data) == 5):
-            vec.append(float(data[2]))
-            coord_bdf.append(vec)
-        elif (line[0]=="C" and len(data) == 7):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
-            elem_tag_bdf.append(int(data[2]))
-    bdf.close()
-    nPoint_bdf = len(coord_bdf)
-    nElem_bdf = len(elem_bdf)
+    nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp = read_mesh(konfig)
 
-    # Read mesh
-    nDim = 3
-    nNode = 4
-    mesh = open(konfig.STRUCT + '_surface.mesh')
-    line = mesh.readline()
-    while not line.strip() == 'Vertices':
-        line = mesh.readline()
-    nPoint = int(mesh.readline())
-    mesh.readline()
-    coord = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
-    bdf_corresp = [0]*nPoint
-    for iPoint in range(nPoint):
-        data = mesh.readline().split()
-        # DO THE ROTATION + MIRROR
-        coord[iPoint][0] = float(data[0])
-        coord[iPoint][1] = float(data[2])
-        coord[iPoint][2] = float(data[1])
-        bdf_corresp[iPoint] = int(data[3])-1
-    line = mesh.readline()
-    while not isInt(line):
-        line = mesh.readline()
-    nElem = int(line)
-    mesh.readline()
-    elem = [[0 for iNode in range(nNode)] for iElem in range(nElem)]
-    for iElem in range(nElem):
-        data = mesh.readline().split()
-        for iNode in range(nNode):
-            elem[iElem][iNode] = int(data[iNode])-1
-    mesh.close()
-
-    # Read sol
-    sol = open(konfig.STRUCT + '_surface.sol')
-    line = sol.readline()
-    while not line.strip() == 'SolAtVertices':
-        line = sol.readline()
-    nPoint = int(sol.readline())
-    sol.readline()
-    sol.readline()
-    pressureCoeff_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
-    for iPoint in range(nPoint):
-        data = sol.readline().split()
-        pressureCoeff_bdf[bdf_corresp[iPoint]] = float(data[0])
-    sol.close()
-
-    # Compute Normals
-
-    normal_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
-
-    coordElemCG = [[0.0 for iDim in range(nDim)] for iElem in range(nElem)]
-    coordEdgeCG = [0.0 for iDim in range(nDim)]
-    vec_a = [0.0 for iDim in range(nDim)] 
-    vec_b = [0.0 for iDim in range(nDim)] 
-
-    # coordElemCG
-
-    for iElem in range(nElem):
-        for iNode in range(nNode):
-            iPoint = elem[iElem][iNode]
-            for iDim in range(nDim):
-                coordElemCG[iElem][iDim] += coord[iPoint][iDim];
-
-    for iElem in range(nElem):
-        for iDim in range(nDim):
-            coordElemCG[iElem][iDim] /= nNode * 1.0
-
-    # normal
-
-    nNeighnour = 2
-    for iElem in range(nElem):
-        for iNode in range(nNode):
-            iPoint = elem[iElem][iNode]
-            for iNeighbour in range(nNeighnour):
-                jNode = (iNode + 1 - nNeighnour * iNeighbour) % nNode
-                jPoint = elem[iElem][jNode]
-            for iDim in range(nDim):
-                coordEdgeCG[iDim] = 0.5 * (coord[iPoint][iDim] + coord[jPoint][iDim])
-            if (iNeighbour == 0):
-                for iDim in range(nDim):
-                    vec_a[iDim] = coord[iPoint][iDim]-coordElemCG[iElem][iDim]
-                    vec_b[iDim] = coordEdgeCG[iDim]-coordElemCG[iElem][iDim]
-            else:
-                for iDim in range(nDim):
-                    vec_a[iDim] = coord[iPoint][iDim]-coordEdgeCG[iDim]
-                    vec_b[iDim] = coordElemCG[iElem][iDim]-coordEdgeCG[iDim]
-            normal_bdf[bdf_corresp[iPoint]][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
-            normal_bdf[bdf_corresp[iPoint]][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
-            normal_bdf[bdf_corresp[iPoint]][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+    area_bdf, normal_bdf = areas_normals(nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp)
 
     # sum_x = 0.0
     # sum_y = 0.0
@@ -355,6 +249,134 @@ def load(config):
     return info
 
 #: def load()
+
+def read_mesh(config):
+
+    # Read bdf
+    bdf = open(config.STRUCT + '.bdf')
+    coord_bdf = []
+    elem_bdf = []
+    elem_tag_bdf = []
+    descriptions = {}
+    for line in bdf:
+        data = line.split()
+        if (line[0]=="$" and len(data) == 3):
+            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
+        elif (line[0]=="G" and len(data) == 6):
+            vec = [float(data[3]), float(data[4].strip('*'))]
+        elif (line[0]=="*" and len(data) == 5):
+            vec.append(float(data[2]))
+            coord_bdf.append(vec)
+        elif (line[0]=="C" and len(data) == 7):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            elem_tag_bdf.append(int(data[2]))
+    bdf.close()
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    # Read mesh
+    nDim = 3
+    nNode = 4
+    mesh = open(config.STRUCT + '_surface.mesh')
+    line = mesh.readline()
+    while not line.strip() == 'Vertices':
+        line = mesh.readline()
+    nPoint = int(mesh.readline())
+    mesh.readline()
+    coord = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
+    bdf_corresp = [0]*nPoint
+    for iPoint in range(nPoint):
+        data = mesh.readline().split()
+        # DO THE ROTATION + MIRROR
+        coord[iPoint][0] = float(data[0])
+        coord[iPoint][1] = float(data[2])
+        coord[iPoint][2] = float(data[1])
+        bdf_corresp[iPoint] = int(data[3])-1
+    line = mesh.readline()
+    while not isInt(line):
+        line = mesh.readline()
+    nElem = int(line)
+    mesh.readline()
+    elem = [[0 for iNode in range(nNode)] for iElem in range(nElem)]
+    for iElem in range(nElem):
+        data = mesh.readline().split()
+        for iNode in range(nNode):
+            elem[iElem][iNode] = int(data[iNode])-1
+    mesh.close()
+
+    # Read sol
+    sol = open(config.STRUCT + '_surface.sol')
+    line = sol.readline()
+    while not line.strip() == 'SolAtVertices':
+        line = sol.readline()
+    nPoint = int(sol.readline())
+    sol.readline()
+    sol.readline()
+    pressureCoeff_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
+    for iPoint in range(nPoint):
+        data = sol.readline().split()
+        pressureCoeff_bdf[bdf_corresp[iPoint]] = float(data[0])
+    sol.close()
+
+    return nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp
+
+
+
+#: def read_mesh()
+
+def areas_normals(nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp):
+
+    # Compute Normals
+
+    normal_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
+    area_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
+
+    coordElemCG = [[0.0 for iDim in range(nDim)] for iElem in range(nElem)]
+    coordEdgeCG = [0.0 for iDim in range(nDim)]
+    vec_a = [0.0 for iDim in range(nDim)] 
+    vec_b = [0.0 for iDim in range(nDim)] 
+
+    # coordElemCG
+
+    for iElem in range(nElem):
+        for iNode in range(nNode):
+            iPoint = elem[iElem][iNode]
+            for iDim in range(nDim):
+                coordElemCG[iElem][iDim] += coord[iPoint][iDim];
+
+    for iElem in range(nElem):
+        for iDim in range(nDim):
+            coordElemCG[iElem][iDim] /= nNode * 1.0
+
+    # normal and area
+
+    nNeighnour = 2
+    for iElem in range(nElem):
+        for iNode in range(nNode):
+            iPoint = elem[iElem][iNode]
+            for iNeighbour in range(nNeighnour):
+                jNode = (iNode + 1 - nNeighnour * iNeighbour) % nNode
+                jPoint = elem[iElem][jNode]
+                for iDim in range(nDim):
+                    coordEdgeCG[iDim] = 0.5 * (coord[iPoint][iDim] + coord[jPoint][iDim])
+                if (iNeighbour == 0):
+                    for iDim in range(nDim):
+                        vec_a[iDim] = coord[iPoint][iDim]-coordElemCG[iElem][iDim]
+                        vec_b[iDim] = coordEdgeCG[iDim]-coordElemCG[iElem][iDim]
+                else:
+                    for iDim in range(nDim):
+                        vec_a[iDim] = coord[iPoint][iDim]-coordEdgeCG[iDim]
+                        vec_b[iDim] = coordElemCG[iElem][iDim]-coordEdgeCG[iDim]
+                normal_bdf[bdf_corresp[iPoint]][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+                normal_bdf[bdf_corresp[iPoint]][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+                normal_bdf[bdf_corresp[iPoint]][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+
+    for iPoint_bdf in range(nPoint_bdf):
+        area_bdf[iPoint_bdf] = (normal_bdf[iPoint_bdf][0]**2.0+normal_bdf[iPoint_bdf][1]**2.0+normal_bdf[iPoint_bdf][2]**2.0)**0.5
+
+    return area_bdf, normal_bdf
+
+#: def areas_normals()
 
 def isInt(s):
     try: 

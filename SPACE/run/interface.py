@@ -177,6 +177,8 @@ def VOL(config):
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
     os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
+    os.system('amg -novol -in ' + konfig.BOUNDARY_FILENAME + ' -hgrad 1.1 -source adap.source -out ' + konfig.BOUNDARY_FILENAME + ' >> log_amg.out 2>&1')
     os.system('ghs3d -O 1 -in ' + konfig.BOUNDARY_FILENAME + ' -out ' + konfig.FLUID_VOLUME + '_euler.meshb > log_ghs.out 2>&1')
     # -grad 1.03 
     os.system('amg -in ' + konfig.FLUID_VOLUME + '_euler.meshb -hgrad 1.1 -source adap.source -out ' + konfig.FLUID_VOLUME + '_euler.meshb >> log_amg.out 2>&1')

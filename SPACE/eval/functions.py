@@ -242,7 +242,7 @@ def structure(config, state=None):
     #  Aerodynamics Solution
     # ----------------------------------------------------    
 
-    aerodynamics(config,state)
+    # aerodynamics(config,state)
 
     # ----------------------------------------------------    
     #  Structure Solution
@@ -250,6 +250,8 @@ def structure(config, state=None):
     
     # redundancy check
     structure_done = all([state.FUNCTIONS.has_key(key) for key in ['MASS']])
+
+    structure_done = False
 
     if not structure_done:
 
@@ -260,8 +262,8 @@ def structure(config, state=None):
         # files: mesh
         name = files.FLUID_SURFACE_FLOW
         link.append(name)
-        name = files.FLUID_SURFACE_MESH
-        link.append(name)
+        # name = files.FLUID_SURFACE_MESH
+        # link.append(name)
         name = files.STRUCT_SURFACE_MESH
         link.append(name)
         name = files.STRUCT_BDF
