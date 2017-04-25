@@ -1,0 +1,173 @@
+--------------------------------- Log file --------------------------------
+DIRECT Version 2.0.4
+ Problem Dimension n                    :      2
+ Eps value                              :   0.1000E-03
+ Maximum number of f-evaluations (maxf) :  10000
+ Maximum number of iterations (MaxT)    :   1000
+ Value of f_global                      :  -0.1798+309
+ Global percentage wanted               :   0.0000E+00
+ Volume percentage wanted               :   0.1000E-05
+ Measure percentage wanted              :   0.1000E-03
+ Epsilon is constant.
+ Our modification of the DIRECT algorithm is used.
+Bounds on variable x 1    :     -3.47349 <= xi <=     -0.00775
+Bounds on variable x 2    :     -3.47349 <= xi <=     -0.00775
+---------------------------------------------------------------------------
+ Iteration   # of f-eval.   fmin
+    1           5          -1.9514772247
+    2           7          -3.0744660668
+    3          13          -3.4337015199
+    5          21          -3.5782649357
+    6          27          -3.6351181269
+    7          29          -3.6421829329
+    8          37          -3.6694782114
+    9          41          -3.6926719455
+   10          51          -3.7078585399
+   11          59          -3.7125114313
+   12          71          -3.7131858540
+   13          83          -3.7134096657
+   14          91          -3.7134753522
+   17         127          -3.7136794411
+   34         335          -3.7136857415
+   35         347          -3.7136873101
+  165        2105          -3.7136893793
+DIRECT stopped: numfunc >= maxf.
+--------------------------------- Summary --------------------------------
+Final function value           :   -3.7136894
+Number of function evaluations :        10003
+Index  Final solution   x(i) - l(i)   u(i) - x(i) 
+    1   -2.7120403       0.7614477      2.7042882
+    2   -2.2054650       1.2680230      2.1977129
+---------------------------------------------------------------------------
+--------------------------------- Log file --------------------------------
+DIRECT Version 2.0.4
+ Problem Dimension n                    :      2
+ Eps value                              :   0.1000E-03
+ Maximum number of f-evaluations (maxf) :  10000
+ Maximum number of iterations (MaxT)    :   1000
+ Value of f_global                      :  -0.1798+309
+ Global percentage wanted               :   0.0000E+00
+ Volume percentage wanted               :   0.1000E-05
+ Measure percentage wanted              :   0.1000E-03
+ Epsilon is constant.
+ Our modification of the DIRECT algorithm is used.
+Bounds on variable x 1    :     -3.47349 <= xi <=     -0.00775
+Bounds on variable x 2    :     -3.47349 <= xi <=     -0.00775
+---------------------------------------------------------------------------
+ Iteration   # of f-eval.   fmin
+    1           5          -1.9514772247
+    2           7          -3.0744660668
+    3          13          -3.4337015199
+    5          21          -3.5782649357
+    6          27          -3.6351181269
+    7          29          -3.6421829329
+    8          37          -3.6694782114
+    9          41          -3.6926719455
+   10          51          -3.7078585399
+   11          59          -3.7125114313
+   12          71          -3.7131858540
+   13          83          -3.7134096657
+   14          91          -3.7134753522
+   17         127          -3.7136794411
+   34         335          -3.7136857415
+   35         347          -3.7136873101
+  165        2105          -3.7136893793
+DIRECT stopped: numfunc >= maxf.
+--------------------------------- Summary --------------------------------
+Final function value           :   -3.7136894
+Number of function evaluations :        10003
+Index  Final solution   x(i) - l(i)   u(i) - x(i) 
+    1   -2.7120403       0.7614477      2.7042882
+    2   -2.2054650       1.2680230      2.1977129
+---------------------------------------------------------------------------
+--------------------------------- Log file --------------------------------
+DIRECT Version 2.0.4
+ Problem Dimension n                    :      2
+ Eps value                              :   0.1000E-03
+ Maximum number of f-evaluations (maxf) :  10000
+ Maximum number of iterations (MaxT)    :   1000
+ Value of f_global                      :  -0.1798+309
+ Global percentage wanted               :   0.0000E+00
+ Volume percentage wanted               :   0.1000E-05
+ Measure percentage wanted              :   0.1000E-03
+ Epsilon is constant.
+ Our modification of the DIRECT algorithm is used.
+Bounds on variable x 1    :     -3.47349 <= xi <=     -0.00775
+Bounds on variable x 2    :     -3.47349 <= xi <=     -0.00775
+---------------------------------------------------------------------------
+ Iteration   # of f-eval.   fmin
+    1           5          -1.9514772247
+    2           7          -3.0744660668
+    3          13          -3.4337015199
+    5          21          -3.5782649357
+    6          27          -3.6351181269
+    7          29          -3.6421829329
+    8          37          -3.6694782114
+    9          41          -3.6926719455
+   10          51          -3.7078585399
+   11          59          -3.7125114313
+   12          71          -3.7131858540
+   13          83          -3.7134096657
+   14          91          -3.7134753522
+   17         127          -3.7136794411
+   34         335          -3.7136857415
+   35         347          -3.7136873101
+  165        2105          -3.7136893793
+DIRECT stopped: numfunc >= maxf.
+--------------------------------- Summary --------------------------------
+Final function value           :   -3.7136894
+Number of function evaluations :        10003
+Index  Final solution   x(i) - l(i)   u(i) - x(i) 
+    1   -2.7120403       0.7614477      2.7042882
+    2   -2.2054650       1.2680230      2.1977129
+---------------------------------------------------------------------------
+--------------------------------- Log file --------------------------------
+DIRECT Version 2.0.4
+ Problem Dimension n                    :      2
+ Eps value                              :   0.1000E-03
+ Maximum number of f-evaluations (maxf) :  10000
+ Maximum number of iterations (MaxT)    :   1000
+ Value of f_global                      :  -0.1798+309
+ Global percentage wanted               :   0.0000E+00
+ Volume percentage wanted               :   0.1000E-05
+ Measure percentage wanted              :   0.1000E-03
+ Epsilon is constant.
+ Our modification of the DIRECT algorithm is used.
+Bounds on variable x 1    :     -3.47349 <= xi <=     -0.00775
+Bounds on variable x 2    :     -3.47349 <= xi <=     -0.00775
+---------------------------------------------------------------------------
+ Iteration   # of f-eval.   fmin
+    1           5          -1.9514772247
+    2           7          -3.0744660668
+    3          13          -3.4337015199
+    5          21          -3.5782649357
+    6          27          -3.6351181269
+    7          29          -3.6421829329
+    8          37          -3.6694782114
+    9          41          -3.6926719455
+   10          51          -3.7078585399
+   11          59          -3.7125114313
+   12          71          -3.7131858540
+   13          83          -3.7134096657
+   14          91          -3.7134753522
+   17         127          -3.7136794411
+   34         335          -3.7136857415
+   35         347          -3.7136873101
+  165        2105          -3.7136893793
+DIRECT stopped: numfunc >= maxf.
+--------------------------------- Summary --------------------------------
+Final function value           :   -3.7136894
+Number of function evaluations :        10003
+Index  Final solution   x(i) - l(i)   u(i) - x(i) 
+    1   -2.7120403       0.7614477      2.7042882
+    2   -2.2054650       1.2680230      2.1977129
+---------------------------------------------------------------------------
+--------------------------------- Log file --------------------------------
+DIRECT Version 2.0.4
+ Problem Dimension n                    :      2
+ Eps value                              :   0.1000E-03
+ Maximum number of f-evaluations (maxf) :  10000
+ Maximum number of iterations (MaxT)    :   1000
+ Value of f_global                      :  -0.1798+309
+ Global percentage wanted               :   0.0000E+00
+ Volume percentage wanted               :   0.1000E-05

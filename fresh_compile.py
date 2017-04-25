@@ -14,8 +14,20 @@ import SPACE
 
 def main():
 
-    project_folder = 'RESPONSE_SURFACE_DV_SUP'
-    project = SPACE.io.load_data(project_folder + '/project.pkl')
+    # Command Line Options
+    parser=OptionParser()
+    parser.add_option("-p", "--project", dest="project_folder",
+                      help="project folder", metavar="PROJECT_FOLDER")
+                      
+    (options, args)=parser.parse_args()
+
+    fresh_compile( options.project_folder )
+
+#: main()
+
+def fresh_compile( project_folder ):
+
+    project = SPACE.io.load_data(os.path.join(project_folder,'project.pkl'))
     project.fresh_compile_designs(project_folder=project_folder)
 
 # -------------------------------------------------------------------

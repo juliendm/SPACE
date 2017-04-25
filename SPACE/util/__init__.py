@@ -5,3 +5,5 @@ from ordered_bunch       import OrderedBunch as ordered_bunch
 from which               import which
 from surf2sol            import surf2sol
 from symmetry            import mesh2tri, tri2mesh
+from lhc_unif            import LHC_unif
+from design_variables    import DesignVariables

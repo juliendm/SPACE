@@ -10,15 +10,10 @@ from optparse import OptionParser
 sys.path.append(os.environ['SPACE_RUN'])
 import SPACE
 from SPACE.surfpack import Surfpack
-
-#from pySBO.pyGPR import LHC_unif
+from SPACE.util import LHC_unif, DesignVariables
 
 sys.path.append(os.environ['SU2_RUN'])
 import SU2
-
-from SU2.io import Config, State
-from SU2.eval import func, grad
-from SU2.opt.project import Project
 
 def main():
 
@@ -26,115 +21,123 @@ def main():
     parser = OptionParser()
     parser.add_option("-f", "--file", dest="filename",
                       help="read config from FILE", metavar="FILE")
-    parser.add_option("-p", "--precalc", dest="precalulate", default="False",
-                      help="precalulate", metavar="PRECALCULATE")
+    parser.add_option("-p", "--project", dest="project_folder",
+                      help="project folder", metavar="PROJECT_FOLDER")
+    parser.add_option("-r", "--regime", dest="regime", default="SUP",
+                      help="regime", metavar="REGIME")
+    parser.add_option("-i", "--initiate", dest="initiate", default="False",
+                      help="initiate", metavar="INITIATE")
     parser.add_option("-n", "--partitions", dest="partitions", default=2,
                       help="number of PARTITIONS", metavar="PARTITIONS")
 
 
     (options, args)=parser.parse_args()
-    options.precalulate = options.precalulate.upper() == 'TRUE'
+    options.initiate = options.initiate.upper() == 'TRUE'
     options.partitions = int( options.partitions )
 
-    response_surface( options.filename    ,
-                        options.precalulate ,
-                        options.partitions  )
+    response_surface( options.filename       ,
+                      options.project_folder ,
+                      options.regime         ,
+                      options.initiate       ,
+                      options.partitions  )
 
 #: main()
 
-def response_surface( filename           ,
-                        precalulate      ,
-                        partitions  = 0  ):
-
-
-
-    # Config
-    config = Config(filename)
-    config.NUMBER_PART = partitions
-    config.CONSOLE = 'CONCISE'
-    config.EXT_ITER = 350
-#    config.EXT_ITER = 600
-
-    # State
-    state  = State()
+def response_surface( filename          ,
+                      project_folder    ,
+                      regime = 'SUP'    ,
+                      initiate = False  ,
+                      partitions  = 0  ):
 
     # Project
-    project = Project(config, state, None, 'SUP_ADD')
 
+    if os.path.exists(project_folder):
+        project = SPACE.io.load_data(os.path.join(project_folder,'project.pkl'))
+        project.compile_designs()
+        config = project.config
+    else:
+        config = SPACE.io.Config(options.filename)
+        state  = SPACE.io.State()
+        project = SPACE.project.Project(config, state, folder=project_folder)
 
-    XB = np.array([[1.2, 9.0],
-           [0.0, 20.0],
-           [-0.5, 0.5],
-           [-0.5, 0.5],
-           [-0.5, 0.5]])
+    print '%d design(s) so far' % len(project.designs)
 
-    ndim = len(XB)
+    # Design Variables
 
-    if precalulate:
+    desvar = DesignVariables(regime)
 
-        nd = 10*ndim
+    if initiate:
 
-        X = LHC_unif(XB,nd)
+        nd = 10*desvar.ndim
 
-        lift_model = Surfpack('LIFT',ndim)
-        drag_model = Surfpack('DRAG',ndim)
+        X = LHC_unif(desvar.XB,nd)
 
-        for i in range(nd):
+        lift_model = Surfpack('LIFT',desvar.ndim)
+        drag_model = Surfpack('DRAG',desvar.ndim)
+        moment_y_model = Surfpack('MOMENT_Y',desvar.ndim)
 
-            dvs = X[i]
+        for index in range(0,len(X)):
+
+            dvs = X[index]
 
             konfig = copy.deepcopy(config)
-                    
-            konfig.MACH_NUMBER = dvs[0]
-            if dvs[0] > 8.0: konfig.CFL_NUMBER = 1.1
-            konfig.AoA = dvs[1]
-            konfig.unpack_dvs([dvs[2],dvs[3],dvs[4]])
+            desvar.unpack(konfig, dvs)
 
             lift_model.add(dvs,project.func('LIFT',konfig))
             drag_model.add(dvs,project.func('DRAG',konfig))
+            moment_y_model.add(dvs,project.func('MOMENT_Y',konfig))
 
-        lift_model.save_data('build_points_lift.dat')
-        drag_model.save_data('build_points_drag.dat')
+        lift_model.save_data(os.path.join(project_folder,'build_points_lift.dat'))
+        drag_model.save_data(os.path.join(project_folder,'build_points_drag.dat'))
+        moment_y_model.save_data(os.path.join(project_folder,'build_points_moment_y.dat'))
 
     else:
 
         na = 30
 
-        lift_model = Surfpack('LIFT',ndim)
-        lift_model.load_data('build_points_lift.dat')
+        lift_model = Surfpack('LIFT',desvar.ndim)
+        lift_model.load_data(os.path.join(project_folder,'build_points_lift.dat'))
 
-        drag_model = Surfpack('DRAG',ndim)
-        drag_model.load_data('build_points_drag.dat')
+        drag_model = Surfpack('DRAG',desvar.ndim)
+        drag_model.load_data(os.path.join(project_folder,'build_points_drag.dat'))
 
-        # Objective: LIFT
+        moment_y_model = Surfpack('MOMENT_Y',desvar.ndim)
+        moment_y_model.load_data(os.path.join(project_folder,'build_points_moment_y.dat'))
+
+        # Build Model
         lift_model.build('kriging')
+        drag_model.build('kriging')
+        moment_y_model.build('kriging')
 
         for ite in range(na):
 
-            dvs = lift_model.max_variance(XB)
+            dvs = lift_model.max_variance(desvar.XB)
 
             print '-------------------------------'
             print dvs
             print '-------------------------------'
 
-            konfig = copy.deepcopy(config)
-            
-            konfig.MACH_NUMBER = dvs[0]
-            if dvs[0] > 8.0: konfig.CFL_NUMBER = 1.1
-            konfig.AoA = dvs[1]
-            konfig.unpack_dvs([dvs[2],dvs[3],dvs[4]])
+            break
 
-            lift_model.add(dvs,project.func('LIFT',konfig))
-            drag_model.add(dvs,project.func('DRAG',konfig))
+            # konfig = copy.deepcopy(config)
+            # apply_dvs(konfig, dvs)
 
-            # Objective: LIFT
-            lift_model.build('kriging')
+            # lift_model.add(dvs,project.func('LIFT',konfig))
+            # drag_model.add(dvs,project.func('DRAG',konfig))
+            # moment_y_model.add(dvs,project.func('MOMENT_Y',konfig))
 
-        lift_model.save_data('enriched_points_lift.dat')
-        drag_model.save_data('enriched_points_drag.dat')
+            # # Build Model
+            # lift_model.build('kriging')
+            # drag_model.build('kriging')
+            # moment_y_model.build('kriging')
 
-        lift_model.save_model('lift.sps')
-        drag_model.save_model('drag.sps')
+            # lift_model.save_data(os.path.join(project_folder,'enriched_points_lift.dat'))
+            # drag_model.save_data(os.path.join(project_folder,'enriched_points_drag.dat'))
+            # moment_y_model.save_data(os.path.join(project_folder,'enriched_points_moment_y.dat'))
+
+        # lift_model.save_model(os.path.join(project_folder,'lift.sps'))
+        # drag_model.save_model(os.path.join(project_folder,'drag.sps'))
+        # moment_y_model.save_model(os.path.join(project_folder,'moment_y.sps'))
 
 #: response_surface()
 

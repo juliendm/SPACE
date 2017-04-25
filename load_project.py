@@ -14,6 +14,7 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 
+from SPACE.util import DesignVariables
 
 # -------------------------------------------------------------------
 #  Main 
@@ -21,10 +22,27 @@ import matplotlib.colors as colors
 
 def main():
 
-    ndim = 11
-    lift_model = Surfpack('LIFT',ndim)
+    # Command Line Options
+    parser=OptionParser()
+    parser.add_option("-p", "--project", dest="project_folder",
+                      help="project folder", metavar="PROJECT_FOLDER")
+    parser.add_option("-r", "--regime", dest="regime", default="SUP",
+                      help="regime", metavar="REGIME")
 
-    project = SPACE.io.load_data('RESPONSE_SURFACE_DV_SUP/project.pkl')
+    (options, args)=parser.parse_args()
+
+    load_project( options.project_folder ,
+                  options.regime )
+
+#: main()
+
+def load_project( project_folder   ,
+                  regime = 'SUP' ):
+
+    desvar = DesignVariables(regime)
+    lift_model = Surfpack('LIFT',desvar.ndim)
+
+    project = SPACE.io.load_data(os.path.join(project_folder,'project.pkl'))
     project.compile_designs()
 
     for index in range(len(project.designs)):
@@ -33,33 +51,15 @@ def main():
     
         funcs = design.funcs
         config = design.config
-
-        dv_mach = float(config.MACH_NUMBER)
-        dv_re = np.log10(float(config.REYNOLDS_NUMBER)) + 3.0/8.0*dv_mach - 7.0
-        if dv_mach >= 1.0:
-            dv_aoa = (float(config.AoA) - (3.92857*dv_mach+3.57143)) / (1.78571*dv_mach+5.71429) # Supersonic
-        else:
-            dv_aoa = float(config.AoA)/7.5-1.0 # Subsobic
-        dv_bf = float(config.BODY_FLAP_DEF)*np.pi/180.0
-        dv_el = float(config.ELEVON_DEF)*np.pi/180.0
-        dv_geo1 = float(config.DV1)
-        # # dv2 = dv2_real + dv4
-        dv_geo2 = float(config.DV2) - float(config.DV4) # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        dv_geo3 = float(config.DV3)
-        dv_geo4 = float(config.DV4)
-        dv_geo5 = float(config.DV5)
-        dv_geo6 = float(config.DV6)
-
-        dvs = [dv_mach,dv_re,dv_aoa,dv_bf,dv_el,dv_geo1,dv_geo2,dv_geo3,dv_geo4,dv_geo5,dv_geo6]
+        dvs = desvar.pack(config)
 
         if hasattr(funcs,'LIFT'):
             lift_model.add(dvs,funcs.LIFT)
 
 
-    lift_model.save_data('build_points_lift.dat')
-
+    lift_model.save_data('build_points_lift_sup.dat')
     lift_model.build('kriging')
-    lift_model.save_model('lift.sps')
+    lift_model.save_model('lift_sup.sps')
 
     # lift_model.load_model('lift.sps')
 
@@ -86,36 +86,10 @@ def main():
             for iy in range(nx):
 
                 dv_mach = MACH[ix,iy]
-
-                if dv_mach >= 1.0:
-                    dv_aoa = (AOA[ix,iy] - (3.92857*dv_mach+3.57143)) / (1.78571*dv_mach+5.71429) # Supersonic
-                else:
-                    dv_aoa = AOA[ix,iy]/7.5-1.0 # Subsobic
-
+                dv_re, dv_aoa = desvar.reverse_variable_change(dv_mach, 1E7, AOA[ix,iy])
                 COEFF[ix,iy] = model.eval([dv_mach,0.0,dv_aoa,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
 
         ax.plot_surface(MACH,AOA,COEFF, norm=colors.Normalize(vmin=model_range[0],vmax=model_range[1]), cmap=cm.jet, rstride=1,cstride=1, linewidth=0, antialiased=False)
-
-
-    # for ix in range(nx):
-    #     for iy in range(nx):
-    #         ZP[ix,iy] = lift_model.eval([XP[ix,iy],1E6,YP[ix,iy],0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-    # ax.plot_surface(XP,YP,ZP, cmap=cm.jet, rstride=1,cstride=1, linewidth=0, antialiased=False)
-
-    # for ix in range(nx):
-    #     for iy in range(nx):
-    #         ZP[ix,iy] = lift_model.eval([XP[ix,iy],1E5,YP[ix,iy],0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-    # ax.plot_surface(XP,YP,ZP, cmap=cm.jet, rstride=1,cstride=1, linewidth=0, antialiased=False)
-
-    # for ix in range(nx):
-    #     for iy in range(nx):
-    #         ZP[ix,iy] = lift_model.eval([XP[ix,iy],4E6,YP[ix,iy],0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-    # ax.plot_surface(XP,YP,ZP, cmap=cm.jet, rstride=1,cstride=1, linewidth=0, antialiased=False)
-
-    # for ix in range(nx):
-    #     for iy in range(nx):
-    #         ZP[ix,iy] = lift_model.eval([XP[ix,iy],5E6,YP[ix,iy],0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-    # ax.plot_surface(XP,YP,ZP, cmap=cm.jet, rstride=1,cstride=1, linewidth=0, antialiased=False)
 
     plt.xlabel('Mach', fontsize=18)
     plt.ylabel('AoA', fontsize=18)

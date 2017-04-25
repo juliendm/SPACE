@@ -10,7 +10,7 @@ import SPACE
 
 def main():
 
-  project_folder = 'RESPONSE_SURFACE_DV_SUP'
+  project_folder = 'RESPONSE_SURFACE_DV_SUB'
   project = SPACE.io.load_data(project_folder + '/project.pkl')
   project.compile_designs()
 
