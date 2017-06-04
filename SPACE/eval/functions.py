@@ -68,19 +68,19 @@ def mission(config, state=None):
 
         data = spaceutil.ordered_bunch()
         data.lift_sub = spaceutil.ordered_bunch()
-        data.lift_sub.sps = config.DATABASE_LIFT_SUB
+        data.lift_sub.sps = config.MODEL_LIFT_SUB
         data.lift_sub.ranges = np.array([[0.5,0.95],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
         data.lift_sup = spaceutil.ordered_bunch()
-        data.lift_sup.sps = config.DATABASE_LIFT_SUP
+        data.lift_sup.sps = config.MODEL_LIFT_SUP
         data.lift_sup.ranges = np.array([[1.1,9.0],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
         lift_model = spacemodel.RangedModel(data)
 
         data = spaceutil.ordered_bunch()
         data.drag_sub = spaceutil.ordered_bunch()
-        data.drag_sub.sps = config.DATABASE_DRAG_SUB
+        data.drag_sub.sps = config.MODEL_DRAG_SUB
         data.drag_sub.ranges = np.array([[0.5,0.95],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
         data.drag_sup = spaceutil.ordered_bunch()
-        data.drag_sup.sps = config.DATABASE_DRAG_SUP
+        data.drag_sup.sps = config.MODEL_DRAG_SUP
         data.drag_sup.ranges = np.array([[1.1,9.0],[-5.0,20.0],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]])
         drag_model = spacemodel.RangedModel(data)
 
@@ -124,7 +124,7 @@ def aerodynamics(config, state=None):
 
         config_aero.MGLEVEL= '0'
         config_aero.MGCYCLE= 'W_CYCLE'
-        config_aero.EXT_ITER= '1000'
+        config_aero.EXT_ITER= '2500'
 
         if Mach < 2.0:                           # 1.0 - 2.0
             config_aero.CFL_NUMBER= '4.0'
@@ -137,13 +137,33 @@ def aerodynamics(config, state=None):
         else:                                    # >= 8.0
             config_aero.CFL_NUMBER= '2.0'
 
+        config_aero.CONV_CRITERIA= 'CAUCHY'
+        config_aero.CAUCHY_FUNC_FLOW= 'DRAG'
+        config_aero.CAUCHY_EPS= '1E-4'
+        config_aero.CAUCHY_ELEMS= '100'
+
 
     else:
         
         config_aero.MGLEVEL= '3'
         config_aero.MGCYCLE= 'W_CYCLE'
+        config_aero.EXT_ITER= '2500'
+
         config_aero.CFL_NUMBER= '5.0'
-        config_aero.EXT_ITER= '1000'
+
+#        config_aero.MGLEVEL= '3'
+#        config_aero.MGCYCLE= 'W_CYCLE'
+#        config_aero.CFL_NUMBER= '2.0'
+#        config_aero.EXT_ITER= '3000'
+#        config_aero.CFL_ADAPT= 'YES'
+#        config_aero.CFL_ADAPT_PARAM= '( 1.5, 0.5, 2.0, 5.0 )'
+
+        config_aero.CONV_CRITERIA= 'CAUCHY'
+        config_aero.CAUCHY_FUNC_FLOW= 'DRAG'
+        config_aero.CAUCHY_EPS= '1E-4'
+        config_aero.CAUCHY_ELEMS= '100'
+
+
     
     # ----------------------------------------------------
     #  Initialize    
@@ -212,6 +232,9 @@ def aerodynamics(config, state=None):
                 name = info.FILES['FLUID_SURFACE_FLOW']
                 push.extend([name])
 
+    else:
+        print 'Aerodynamics done'
+
     # return output
     aero = spaceutil.ordered_bunch()
     for key in spaceio.optnames_aero:
@@ -242,7 +265,7 @@ def structure(config, state=None):
     #  Aerodynamics Solution
     # ----------------------------------------------------    
 
-    # aerodynamics(config,state)
+    aerodynamics(config,state)
 
     # ----------------------------------------------------    
     #  Structure Solution
@@ -250,8 +273,7 @@ def structure(config, state=None):
     
     # redundancy check
     structure_done = all([state.FUNCTIONS.has_key(key) for key in ['MASS']])
-
-    structure_done = False
+    structure_done = False #####################################################################
 
     if not structure_done:
 
@@ -310,6 +332,8 @@ def geometry(config, state=None):
     # redundancy check
     geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
 
+#    geometry_done = False
+
     if not geometry_done:
 
         # files to pull
@@ -340,6 +364,9 @@ def geometry(config, state=None):
     # for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH']:
     #     if state.FILES.has_key(key):
     #         geo[key] = state.FILES[key]
+
+    else:
+        print 'Geometry done'
 
     # return geo
 
@@ -402,6 +429,9 @@ def fluid_mesh(config, state=None):
     # for key in [FLUID_VOLUME_MESH']:
     #     if state.FILES.has_key(key):
     #         fluid[key] = state.FILES[key]
+
+    else:
+        print 'Fluid Mesh done'
 
     # return fluid
 

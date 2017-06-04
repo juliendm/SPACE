@@ -41,9 +41,18 @@ def structure(config):
     konfig = copy.deepcopy(config)
 
     # Load
+
     spaceutil.surf2sol(konfig)
     SPACE_INT(konfig)
-    info = spaceload(konfig)
+
+    nx = float(konfig.ACCELERATION_X)
+    ny = float(konfig.ACCELERATION_Y)
+    nz = float(konfig.ACCELERATION_Z)
+
+    loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
+    gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
+
+    info = spaceload(konfig, loadFactor, gravityVector)
 
     # Material properties
 
@@ -57,77 +66,20 @@ def structure(config):
     tMin = 0.0016 # 0.0016
     tMax = 3.0 # 0.020
 
-    nx = float(konfig.ACCELERATION_X)
-    ny = float(konfig.ACCELERATION_Y)
-    nz = float(konfig.ACCELERATION_Z)
-
-    loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
-
-
-
     KSWeight = 80.0
     evalFuncs = ['mass','ks0','mf0']
     SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
     #SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
     numLoadCases = len(SPs)
 
-    structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
+    # Create Solver
 
+    structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
     FEASolver = pytacs.pyTACS(konfig.STRUCT + '.bdf', comm=comm, options=structOptions)
 
-    # SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','CTAIL:LOW','CTAIL_T','FUSE_R']
-    # SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FLAP_T','FUSE_F']
-    # SKIN_WING_U = ['LWING:UPP','LWING_T::0']
-    # SKIN_WING_L = ['LWING:LOW','LWING_T::1']
-    # SKINS = SKIN_FUSE_U + SKIN_FUSE_L + SKIN_WING_U + SKIN_WING_L + ['MSKINC:a','MSKINC:b']
+    # Add Design Variables
 
-    # JUNCTIONS = ['FLAP_FUSE','LWING_FUSE','CTAIL_FUSE']
-
-    # FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
-    #     'MFRAME:10','MFRAME:11','MFRAME:12']
-    # LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
-    # RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
-    #     'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
-    #     'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
-    # SPARS = ['MSPARF:02','MSPARF:03',
-    #     'MSPARV:00','MSPARV:01',
-    #     'MSPARC:00','MSPARC:04','MSPARC:05',
-    #     'MSPARW:00','MSPARW:02','MSPARW:08','MSPARW:09']
-    # STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03',
-    #     'MSTRINGW:01','MSTRINGW:03','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07']
-    # MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS
-
-    # corresp = [-1 for index in range(len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]))]
-    # dv = -1;
-    # SKIN_IDS = FEASolver.selectCompIDs(include=SKINS)[0]
-    # for i in range(len(SKIN_IDS)):
-    #     dv_name = "SKIN_" + str(i)
-    #     FEASolver.addDVGroup(dv_name, include = SKIN_IDS[i])
-    #     dv = dv+1;
-    #     corresp[SKIN_IDS[i]] = dv;
-    # JUNCTION_IDS = FEASolver.selectCompIDs(include=JUNCTIONS)[0]
-    # for i in range(len(JUNCTION_IDS)):
-    #     dv_name = "JUNCTION_" + str(i)
-    #     FEASolver.addDVGroup(dv_name, include = JUNCTION_IDS[i])
-    #     dv = dv+1;
-    #     corresp[JUNCTION_IDS[i]] = dv;
-    # for i in range(len(MEMBERS)):
-    #     dv_name = MEMBERS[i]
-    #     FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
-    #     dv = dv+1;
-    #     MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
-    #     for k in range(len(MEMBERS_IDS_I)):
-    #         corresp[MEMBERS_IDS_I[k]] = dv;
-
-    #print(corresp)
-    #print(len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]))
-
-    ncoms = FEASolver.nComp
-    for i in range(0,ncoms):
-        dv_name = 'stru_'+str(i)
-        FEASolver.addDVGroup(dv_name, include = i)
-
+    corresp = addDVGroups(FEASolver)
 
     def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
         con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
@@ -137,6 +89,8 @@ def structure(config):
         return con, scale
 
     FEASolver.createTACSAssembler(conCallBack)
+
+    # Add Functions
 
     # Mass Functions
     FEASolver.addFunction('mass', functions.StructuralMass)
@@ -154,6 +108,7 @@ def structure(config):
     #ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement)
 
     # Load Factor
+
     FEASolver.setOption('gravityVector',gravityVector.tolist())
     for i in range(numLoadCases):
         FEASolver.addInertialLoad(SPs[i])
@@ -219,15 +174,99 @@ def structure(config):
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
         'Iterations limit':100000,
-        'Major iterations limit':3,#3000,
+        'Major iterations limit':3,
         'Minor iterations limit':500,
         'Major step limit':2.0})
     sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
 
     # Write Files
 
-    FEASolver.writeBDFForces(SPs[0], "visualize_forces.bdf")
-    FEASolver.writeMeshDisplacements(SPs[0], "struct_tacs.sol")
+    write_files(config, FEASolver, SPs[0])
+
+    # get history and objectives
+
+    history      = spaceio.read_history( history_filename )
+    outputs      = spaceutil.ordered_bunch()
+    outputs.MASS = history[obj_name][-1]
+
+    # info out
+
+    info = spaceio.State(info)
+    info.FUNCTIONS.update(outputs)
+
+    return info
+
+#: def structure()
+
+def addDVGroups(FEASolver):
+
+    # SKIN
+
+    SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','FUSE_R'] # 'CTAIL:LOW','CTAIL_T',
+    SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FLAP_T','FUSE_F']
+    SKIN_WING_U = ['LWING:UPP','LWING_T::0']
+    SKIN_WING_L = ['LWING:LOW','LWING_T::1']
+    SKINS = SKIN_FUSE_U + SKIN_FUSE_L + SKIN_WING_U + SKIN_WING_L + ['MSKINC:a','MSKINC:b']
+
+    # JUNCTIONS
+
+    JUNCTIONS = ['FLAP_FUSE','LWING_FUSE'] # 'CTAIL_FUSE'
+
+    # MEMBERS
+
+    FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
+        'MFRAME:10','MFRAME:11','MFRAME:12']
+    LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
+    RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
+        # 'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
+        'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
+    SPARS = ['MSPARF:00','MSPARF:01', # 'MSPARF:02','MSPARF:03',
+        # 'MSPARV:00','MSPARV:01',
+        'MSPARC:00','MSPARC:04','MSPARC:05',
+        'MSPARW:00','MSPARW:02','MSPARW:08'] # 'MSPARW:09'
+    STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03',
+        'MSTRINGW:01','MSTRINGW:03','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07']
+    MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS
+
+    assert len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]) == FEASolver.nComp
+
+    corresp = [-1 for index in range(FEASolver.nComp)]
+    dv = -1;
+
+    SKIN_IDS = FEASolver.selectCompIDs(include=SKINS)[0]
+    for i in range(len(SKIN_IDS)):
+        dv_name = "SKIN_" + str(i)
+        FEASolver.addDVGroup(dv_name, include = SKIN_IDS[i])
+        dv = dv+1;
+        corresp[SKIN_IDS[i]] = dv;
+
+    JUNCTION_IDS = FEASolver.selectCompIDs(include=JUNCTIONS)[0]
+    for i in range(len(JUNCTION_IDS)):
+        dv_name = "JUNCTION_" + str(i)
+        FEASolver.addDVGroup(dv_name, include = JUNCTION_IDS[i])
+        dv = dv+1;
+        corresp[JUNCTION_IDS[i]] = dv;
+
+    for i in range(len(MEMBERS)):
+        dv_name = MEMBERS[i]
+        FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
+        dv = dv+1;
+        MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
+        for k in range(len(MEMBERS_IDS_I)):
+            corresp[MEMBERS_IDS_I[k]] = dv;
+
+    return corresp
+
+    # ncoms = FEASolver.nComp
+    # for i in range(0,ncoms):
+    #     dv_name = 'stru_'+str(i)
+    #     FEASolver.addDVGroup(dv_name, include = i)
+
+
+def write_files(config, FEASolver, SP):
+
+    FEASolver.writeBDFForces(SP, "visualize_forces.bdf")
+    FEASolver.writeMeshDisplacements(SP, "struct_tacs.sol")
     FEASolver.writeSolution()
 
     x_final = numpy.zeros(FEASolver.nComp)
@@ -236,7 +275,7 @@ def structure(config):
     n_point_bdf = 0
     elem_bdf = []
     elem_tag_bdf = []
-    bdf = open(konfig.STRUCT + '.bdf')
+    bdf = open(config.STRUCT + '.bdf')
     for line in bdf:
         data = line.split()
         if (line[0]=="G" and len(data) == 6):
@@ -262,19 +301,6 @@ def structure(config):
         dvs.write('%f\n' % x_final[i])
     dvs.close()
     postprocess(config, x_final)
-
-    # get history and objectives
-    history      = spaceio.read_history( history_filename )
-    outputs      = spaceutil.ordered_bunch()
-    outputs.MASS = history[obj_name][-1]
-
-    # info out
-    info = spaceio.State(info)
-    info.FUNCTIONS.update(outputs)
-
-    return info
-
-#: def structure()
 
 def write_sol_1(sol_file,solution):
  

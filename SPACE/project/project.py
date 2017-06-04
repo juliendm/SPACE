@@ -55,18 +55,32 @@ class Project(object):
         state.find_files(config)
 
         # check has the needed files
-        if ('DATABASE_LIFT_SUP' in config.keys()):
-            if 'DATABASE_LIFT_SUP' not in state.FILES:
-                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_LIFT_SUP
-        if ('DATABASE_DRAG_SUP' in config.keys()):
-            if 'DATABASE_DRAG_SUP' not in state.FILES:
-                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_DRAG_SUP
-        if ('DATABASE_LIFT_SUB' in config.keys()):
-            if 'DATABASE_LIFT_SUB' not in state.FILES:
-                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_LIFT_SUB
-        if ('DATABASE_DRAG_SUB' in config.keys()):
-            if 'DATABASE_DRAG_SUB' not in state.FILES:
-                raise Exception , 'Could not find mesh file: %s' % config.DATABASE_DRAG_SUB
+        if ('MODEL_LIFT_SUP' in config.keys()):
+            if 'MODEL_LIFT_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_LIFT_SUP
+        if ('MODEL_DRAG_SUP' in config.keys()):
+            if 'MODEL_DRAG_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_DRAG_SUP
+        if ('MODEL_FORCE_Z_SUP' in config.keys()):
+            if 'MODEL_FORCE_Z_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_FORCE_Z_SUP
+        if ('MODEL_MOMENT_Y_SUP' in config.keys()):
+            if 'MODEL_MOMENT_Y_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_MOMENT_Y_SUP
+
+        if ('MODEL_LIFT_SUB' in config.keys()):
+            if 'MODEL_LIFT_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_LIFT_SUB
+        if ('MODEL_DRAG_SUB' in config.keys()):
+            if 'MODEL_DRAG_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_DRAG_SUB
+        if ('MODEL_FORCE_Z_SUB' in config.keys()):
+            if 'MODEL_FORCE_Z_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_FORCE_Z_SUB
+        if ('MODEL_MOMENT_Y_SUB' in config.keys()):
+            if 'MODEL_MOMENT_Y_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_MOMENT_Y_SUB
+
         if ('CONFIG_AERO_FILENAME' in config.keys()):
             if 'FARFIELD' not in state.FILES:
                 raise Exception , 'Could not find mesh file: %s' % config.FARFIELD_FILENAME

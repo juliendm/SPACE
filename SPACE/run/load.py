@@ -13,34 +13,30 @@ from .. import io  as spaceio
 #  Load Simulation
 # ----------------------------------------------------------------------
 
-def load(config):
+def load(config, loadFactor, gravity_vector):
 
     # local copy
     konfig = copy.deepcopy(config)
 
-    nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp = read_mesh(konfig)
+    nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp, pressureCoeff_bdf, frictionCoeff_bdf = read_mesh(konfig)
 
     area_bdf, normal_bdf = areas_normals(nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp)
 
     # sum_x = 0.0
     # sum_y = 0.0
     # sum_z = 0.0
+    # sum_area = 0.0
     # for iPoint_bdf in range(nPoint_bdf):
     #     sum_x += normal_bdf[iPoint_bdf][0]
     #     sum_y += normal_bdf[iPoint_bdf][1]
     #     sum_z += normal_bdf[iPoint_bdf][2]
+    #     sum_area += area_bdf[iPoint_bdf]
     # print sum_x
     # print sum_y
     # print sum_z
+    # print sum_area
 
     # Compute Load
-
-    nx = float(konfig.ACCELERATION_X)
-    ny = float(konfig.ACCELERATION_Y)
-    nz = float(konfig.ACCELERATION_Z)
-
-    loadFactor = np.sqrt(nx*nx+ny*ny+nz*nz)
-    gravity_vector = -9.81 * np.array([-nx/loadFactor,-nz/loadFactor,-ny/loadFactor]) # Change of Frame: to Structure Frame
 
     thrust_vector = np.array([-float(konfig.THRUST), 0.0, 0.0])
     thrust_balance = 0.5;
@@ -52,6 +48,259 @@ def load(config):
     lox_vector = gravity_vector*loadFactor*float(konfig.LOX_MASS)
     kero_vector = gravity_vector*loadFactor*float(konfig.KERO_MASS)
     gnc_vector = gravity_vector*loadFactor*float(konfig.GNC_MASS)
+
+
+    apply_fuse_r, apply_thrust, apply_gnc, apply_kero, apply_payload, apply_lox, apply_propu = get_apply(descriptions, nElem_bdf, elem_tag_bdf, elem_bdf)
+
+
+
+    # # Control Forces
+
+    # aero_forces = [0.0 for iDim in range(nDim)]
+    # for iPoint_bdf in range(nPoint_bdf):
+
+    #     # Pressure
+        
+    #     pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
+    #     for iDim in range(nDim):
+    #         aero_forces[iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
+
+    #     # Friction
+        
+    #     for iDim in range(nDim):
+    #         shear_stress = float(konfig.P_DYN_INF)*frictionCoeff_bdf[iPoint_bdf][iDim]
+    #         aero_forces[iDim] += area_bdf[iPoint_bdf]*shear_stress
+
+    # for iDim in range(nDim):
+    #     aero_forces[iDim] /= float(konfig.P_DYN_INF) * float(konfig.REF_AREA)
+
+    # print "AERO FORCES: ", aero_forces
+
+    # aoa = float(konfig.AoA)*np.pi/180.0
+
+    # lift_coeff = ( -aero_forces[0]*np.sin(aoa) + aero_forces[1]*np.cos(aoa) )
+    # drag_coeff = ( aero_forces[0]*np.cos(aoa) + aero_forces[1]*np.sin(aoa) )
+
+    # print lift_coeff, drag_coeff
+
+
+
+
+
+    load_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
+
+    for iPoint_bdf in range(nPoint_bdf):
+
+        if not iPoint_bdf+1 in apply_fuse_r:
+
+            # Pressure
+            
+            pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
+            for iDim in range(nDim):
+                load_bdf[iPoint_bdf][iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
+
+            # Friction
+            
+            for iDim in range(nDim):
+                shear_stress = float(konfig.P_DYN_INF)*frictionCoeff_bdf[iPoint_bdf][iDim]
+                load_bdf[iPoint_bdf][iDim] += area_bdf[iPoint_bdf]*shear_stress
+
+        for iDim in range(nDim):
+
+            if iPoint_bdf+1 in apply_thrust:
+                index_thrust = apply_thrust.index(iPoint_bdf+1)
+                if index_thrust == 0:
+                    load_bdf[iPoint_bdf][iDim] += thrust_balance*thrust_vector[iDim]
+                elif index_thrust == 1:
+                    load_bdf[iPoint_bdf][iDim] += (1.0-thrust_balance)*thrust_vector[iDim]
+            if iPoint_bdf+1 in apply_gnc:
+                load_bdf[iPoint_bdf][iDim] += gnc_vector[iDim]/len(apply_gnc)
+                #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',',gnc_mass/len(apply_gnc), '],'
+            if iPoint_bdf+1 in apply_kero:
+                load_bdf[iPoint_bdf][iDim] += kero_vector[iDim]/len(apply_kero)
+                #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', kero_mass/len(apply_kero), '],'
+            if iPoint_bdf+1 in apply_payload:
+                load_bdf[iPoint_bdf][iDim] += payload_vector[iDim]/len(apply_payload)
+                #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', payload_mass/len(apply_payload), '],'
+            if iPoint_bdf+1 in apply_lox:
+                load_bdf[iPoint_bdf][iDim] += lox_vector[iDim]/len(apply_lox)
+                #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', lox_mass/len(apply_lox), '],'
+            if iPoint_bdf+1 in apply_propu:
+                load_bdf[iPoint_bdf][iDim] += propu_vector[iDim]/len(apply_propu)
+                #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', propu_mass/len(apply_propu), '],'
+
+    # Write load
+
+    load = open(konfig.LOAD_FILENAME,'w')
+    load.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
+    for iPoint_bdf in range(nPoint_bdf):
+        load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
+    for iElem_bdf in range(nElem_bdf):
+        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+    load.close()
+
+    # Write Check
+
+    load_mesh = open('struct_load.mesh', 'w')
+    load_mesh.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nVertices\n' + str(nPoint_bdf) + '\n\n')
+    for iPoint_bdf in range(nPoint_bdf):
+        load_mesh.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(iPoint_bdf+1) + "\n")
+    load_mesh.write('\nQuadrilaterals\n' + str(nElem_bdf) + '\n\n')
+    for iElem_bdf in range(nElem_bdf):
+        load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + " 0\n")
+    load_mesh.write('\nEnd\n')
+    load_mesh.close()
+
+    load_sol = open('struct_load.sol', 'w')
+    load_sol.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nSolAtVertices\n' + str(nPoint_bdf) + '\n3 1 1 1\n')
+    for iPoint_bdf in range(nPoint_bdf):
+        load_sol.write(str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
+    load_sol.write('\nEnd\n')
+    load_sol.close()
+
+    # info out
+    info = spaceio.State()
+    info.FILES.LOAD = konfig.LOAD_FILENAME
+    return info
+
+#: def load()
+
+def read_mesh(config):
+
+    # Read bdf
+    bdf = open(config.STRUCT + '.bdf')
+    coord_bdf = []
+    elem_bdf = []
+    elem_tag_bdf = []
+    descriptions = {}
+    for line in bdf:
+        data = line.split()
+        if (line[0]=="$" and len(data) == 3):
+            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
+        elif (line[0]=="G" and len(data) == 6):
+            vec = [float(data[3]), float(data[4].strip('*'))]
+        elif (line[0]=="*" and len(data) == 5):
+            vec.append(float(data[2]))
+            coord_bdf.append(vec)
+        elif (line[0]=="C" and len(data) == 7):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            elem_tag_bdf.append(int(data[2]))
+    bdf.close()
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    # Read mesh
+    nDim = 3
+    nNode = 4
+    mesh = open(config.STRUCT + '_surface.mesh')
+    line = mesh.readline()
+    while not line.strip() == 'Vertices':
+        line = mesh.readline()
+    nPoint = int(mesh.readline())
+    mesh.readline()
+    coord = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
+    bdf_corresp = [0]*nPoint
+    for iPoint in range(nPoint):
+        data = mesh.readline().split()
+        # DO THE ROTATION + MIRROR
+        coord[iPoint][0] = float(data[0])
+        coord[iPoint][1] = float(data[2])
+        coord[iPoint][2] = float(data[1])
+        bdf_corresp[iPoint] = int(data[3])-1
+    line = mesh.readline()
+    while not isInt(line):
+        line = mesh.readline()
+    nElem = int(line)
+    mesh.readline()
+    elem = [[0 for iNode in range(nNode)] for iElem in range(nElem)]
+    for iElem in range(nElem):
+        data = mesh.readline().split()
+        for iNode in range(nNode):
+            elem[iElem][iNode] = int(data[iNode])-1
+    mesh.close()
+
+    # Read sol
+    sol = open(config.STRUCT + '_surface.sol')
+    line = sol.readline()
+    while not line.strip() == 'SolAtVertices':
+        line = sol.readline()
+    nPoint = int(sol.readline())
+    sol.readline()
+    sol.readline()
+
+    pressureCoeff_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
+    frictionCoeff_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
+
+    for iPoint in range(nPoint):
+        data = sol.readline().split()
+        pressureCoeff_bdf[bdf_corresp[iPoint]] = float(data[0])
+        # DO THE ROTATION + MIRROR
+        frictionCoeff_bdf[bdf_corresp[iPoint]][0] = float(data[0+1])
+        frictionCoeff_bdf[bdf_corresp[iPoint]][1] = float(data[2+1])
+        frictionCoeff_bdf[bdf_corresp[iPoint]][2] = float(data[1+1])
+    sol.close()
+
+    return nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp, pressureCoeff_bdf, frictionCoeff_bdf
+
+
+
+#: def read_mesh()
+
+def areas_normals(nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp):
+
+    # Compute Normals
+
+    normal_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
+    area_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
+
+    coordElemCG = [[0.0 for iDim in range(nDim)] for iElem in range(nElem)]
+    coordEdgeCG = [0.0 for iDim in range(nDim)]
+    vec_a = [0.0 for iDim in range(nDim)] 
+    vec_b = [0.0 for iDim in range(nDim)] 
+
+    # coordElemCG
+
+    for iElem in range(nElem):
+        for iNode in range(nNode):
+            iPoint = elem[iElem][iNode]
+            for iDim in range(nDim):
+                coordElemCG[iElem][iDim] += coord[iPoint][iDim];
+
+    for iElem in range(nElem):
+        for iDim in range(nDim):
+            coordElemCG[iElem][iDim] /= nNode * 1.0
+
+    # normal and area
+
+    nNeighnour = 2
+    for iElem in range(nElem):
+        for iNode in range(nNode):
+            iPoint = elem[iElem][iNode]
+            for iNeighbour in range(nNeighnour):
+                jNode = (iNode + 1 - nNeighnour * iNeighbour) % nNode
+                jPoint = elem[iElem][jNode]
+                for iDim in range(nDim):
+                    coordEdgeCG[iDim] = 0.5 * (coord[iPoint][iDim] + coord[jPoint][iDim])
+                if (iNeighbour == 0):
+                    for iDim in range(nDim):
+                        vec_a[iDim] = coord[iPoint][iDim]-coordElemCG[iElem][iDim]
+                        vec_b[iDim] = coordEdgeCG[iDim]-coordElemCG[iElem][iDim]
+                else:
+                    for iDim in range(nDim):
+                        vec_a[iDim] = coord[iPoint][iDim]-coordEdgeCG[iDim]
+                        vec_b[iDim] = coordElemCG[iElem][iDim]-coordEdgeCG[iDim]
+                normal_bdf[bdf_corresp[iPoint]][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+                normal_bdf[bdf_corresp[iPoint]][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+                normal_bdf[bdf_corresp[iPoint]][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+
+    for iPoint_bdf in range(nPoint_bdf):
+        area_bdf[iPoint_bdf] = (normal_bdf[iPoint_bdf][0]**2.0+normal_bdf[iPoint_bdf][1]**2.0+normal_bdf[iPoint_bdf][2]**2.0)**0.5
+
+    return area_bdf, normal_bdf
+
+#: def areas_normals()
+
+def get_apply(descriptions, nElem_bdf, elem_tag_bdf, elem_bdf):
 
     nLongeron = 4
     nFrame = 13
@@ -194,189 +443,9 @@ def load(config):
     # print apply_lox
     # print apply_propu
 
-    # aero_forces = [0.0 for iDim in range(nDim)]
-    # for iPoint_bdf in range(nPoint_bdf):
-    #     pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] + float(konfig.P_INF)
-    #     for iDim in range(nDim):
-    #         aero_forces[iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
-    # print "AERO FORCES: ", aero_forces
-    # aoa = 9.959197*np.pi/180.0
-    # print  aero_forces[0]*np.cos(aoa) + aero_forces[1]*np.sin(aoa) * 2.0
-    # print -aero_forces[0]*np.sin(aoa) + aero_forces[1]*np.cos(aoa) * 2.0
+    return apply_fuse_r, apply_thrust, apply_gnc, apply_kero, apply_payload, apply_lox, apply_propu
 
-    load_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
-
-    for iPoint_bdf in range(nPoint_bdf):
-        pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
-        for iDim in range(nDim):
-          if not iPoint_bdf+1 in apply_fuse_r:
-              load_bdf[iPoint_bdf][iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
-          if iPoint_bdf+1 in apply_thrust:
-              index_thrust = apply_thrust.index(iPoint_bdf+1)
-              if index_thrust == 0:
-                  load_bdf[iPoint_bdf][iDim] += thrust_balance*thrust_vector[iDim]
-              elif index_thrust == 1:
-                  load_bdf[iPoint_bdf][iDim] += (1.0-thrust_balance)*thrust_vector[iDim]
-          if iPoint_bdf+1 in apply_gnc:
-              load_bdf[iPoint_bdf][iDim] += gnc_vector[iDim]/len(apply_gnc)
-              #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',',gnc_mass/len(apply_gnc), '],'
-          if iPoint_bdf+1 in apply_kero:
-              load_bdf[iPoint_bdf][iDim] += kero_vector[iDim]/len(apply_kero)
-              #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', kero_mass/len(apply_kero), '],'
-          if iPoint_bdf+1 in apply_payload:
-              load_bdf[iPoint_bdf][iDim] += payload_vector[iDim]/len(apply_payload)
-              #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', payload_mass/len(apply_payload), '],'
-          if iPoint_bdf+1 in apply_lox:
-              load_bdf[iPoint_bdf][iDim] += lox_vector[iDim]/len(apply_lox)
-              #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', lox_mass/len(apply_lox), '],'
-          if iPoint_bdf+1 in apply_propu:
-              load_bdf[iPoint_bdf][iDim] += propu_vector[iDim]/len(apply_propu)
-              #print '[', coord_bdf[iPoint_bdf][0], ',', coord_bdf[iPoint_bdf][1], ',', coord_bdf[iPoint_bdf][2], ',', propu_mass/len(apply_propu), '],'
-
-    # Write load
-
-    load = open(konfig.LOAD_FILENAME,'w')
-    load.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
-    for iPoint_bdf in range(nPoint_bdf):
-        load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
-    for iElem_bdf in range(nElem_bdf):
-        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
-    load.close()
-
-    # info out
-    info = spaceio.State()
-    info.FILES.LOAD = konfig.LOAD_FILENAME
-    return info
-
-#: def load()
-
-def read_mesh(config):
-
-    # Read bdf
-    bdf = open(config.STRUCT + '.bdf')
-    coord_bdf = []
-    elem_bdf = []
-    elem_tag_bdf = []
-    descriptions = {}
-    for line in bdf:
-        data = line.split()
-        if (line[0]=="$" and len(data) == 3):
-            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
-        elif (line[0]=="G" and len(data) == 6):
-            vec = [float(data[3]), float(data[4].strip('*'))]
-        elif (line[0]=="*" and len(data) == 5):
-            vec.append(float(data[2]))
-            coord_bdf.append(vec)
-        elif (line[0]=="C" and len(data) == 7):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
-            elem_tag_bdf.append(int(data[2]))
-    bdf.close()
-    nPoint_bdf = len(coord_bdf)
-    nElem_bdf = len(elem_bdf)
-
-    # Read mesh
-    nDim = 3
-    nNode = 4
-    mesh = open(config.STRUCT + '_surface.mesh')
-    line = mesh.readline()
-    while not line.strip() == 'Vertices':
-        line = mesh.readline()
-    nPoint = int(mesh.readline())
-    mesh.readline()
-    coord = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
-    bdf_corresp = [0]*nPoint
-    for iPoint in range(nPoint):
-        data = mesh.readline().split()
-        # DO THE ROTATION + MIRROR
-        coord[iPoint][0] = float(data[0])
-        coord[iPoint][1] = float(data[2])
-        coord[iPoint][2] = float(data[1])
-        bdf_corresp[iPoint] = int(data[3])-1
-    line = mesh.readline()
-    while not isInt(line):
-        line = mesh.readline()
-    nElem = int(line)
-    mesh.readline()
-    elem = [[0 for iNode in range(nNode)] for iElem in range(nElem)]
-    for iElem in range(nElem):
-        data = mesh.readline().split()
-        for iNode in range(nNode):
-            elem[iElem][iNode] = int(data[iNode])-1
-    mesh.close()
-
-    # Read sol
-    sol = open(config.STRUCT + '_surface.sol')
-    line = sol.readline()
-    while not line.strip() == 'SolAtVertices':
-        line = sol.readline()
-    nPoint = int(sol.readline())
-    sol.readline()
-    sol.readline()
-    pressureCoeff_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
-    for iPoint in range(nPoint):
-        data = sol.readline().split()
-        pressureCoeff_bdf[bdf_corresp[iPoint]] = float(data[0])
-    sol.close()
-
-    return nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp
-
-
-
-#: def read_mesh()
-
-def areas_normals(nDim, nNode, elem_tag_bdf, descriptions, nPoint_bdf, coord_bdf, nElem_bdf, elem_bdf, nPoint, coord, nElem, elem, bdf_corresp):
-
-    # Compute Normals
-
-    normal_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
-    area_bdf = [0.0 for iPoint_bdf in range(nPoint_bdf)]
-
-    coordElemCG = [[0.0 for iDim in range(nDim)] for iElem in range(nElem)]
-    coordEdgeCG = [0.0 for iDim in range(nDim)]
-    vec_a = [0.0 for iDim in range(nDim)] 
-    vec_b = [0.0 for iDim in range(nDim)] 
-
-    # coordElemCG
-
-    for iElem in range(nElem):
-        for iNode in range(nNode):
-            iPoint = elem[iElem][iNode]
-            for iDim in range(nDim):
-                coordElemCG[iElem][iDim] += coord[iPoint][iDim];
-
-    for iElem in range(nElem):
-        for iDim in range(nDim):
-            coordElemCG[iElem][iDim] /= nNode * 1.0
-
-    # normal and area
-
-    nNeighnour = 2
-    for iElem in range(nElem):
-        for iNode in range(nNode):
-            iPoint = elem[iElem][iNode]
-            for iNeighbour in range(nNeighnour):
-                jNode = (iNode + 1 - nNeighnour * iNeighbour) % nNode
-                jPoint = elem[iElem][jNode]
-                for iDim in range(nDim):
-                    coordEdgeCG[iDim] = 0.5 * (coord[iPoint][iDim] + coord[jPoint][iDim])
-                if (iNeighbour == 0):
-                    for iDim in range(nDim):
-                        vec_a[iDim] = coord[iPoint][iDim]-coordElemCG[iElem][iDim]
-                        vec_b[iDim] = coordEdgeCG[iDim]-coordElemCG[iElem][iDim]
-                else:
-                    for iDim in range(nDim):
-                        vec_a[iDim] = coord[iPoint][iDim]-coordEdgeCG[iDim]
-                        vec_b[iDim] = coordElemCG[iElem][iDim]-coordEdgeCG[iDim]
-                normal_bdf[bdf_corresp[iPoint]][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
-                normal_bdf[bdf_corresp[iPoint]][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
-                normal_bdf[bdf_corresp[iPoint]][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
-
-    for iPoint_bdf in range(nPoint_bdf):
-        area_bdf[iPoint_bdf] = (normal_bdf[iPoint_bdf][0]**2.0+normal_bdf[iPoint_bdf][1]**2.0+normal_bdf[iPoint_bdf][2]**2.0)**0.5
-
-    return area_bdf, normal_bdf
-
-#: def areas_normals()
+#: def get_apply()
 
 def isInt(s):
     try: 

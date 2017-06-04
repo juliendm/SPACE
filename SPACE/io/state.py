@@ -125,10 +125,15 @@ class State(ordered_bunch):
 
         # mesh
         
-        if ('DATABASE_LIFT_SUP' in config.keys()): register_file('DATABASE_LIFT_SUP',config.DATABASE_LIFT_SUP)
-        if ('DATABASE_DRAG_SUP' in config.keys()): register_file('DATABASE_DRAG_SUP',config.DATABASE_DRAG_SUP)
-        if ('DATABASE_LIFT_SUB' in config.keys()): register_file('DATABASE_LIFT_SUB',config.DATABASE_LIFT_SUB)
-        if ('DATABASE_DRAG_SUB' in config.keys()): register_file('DATABASE_DRAG_SUB',config.DATABASE_DRAG_SUB)
+        if ('MODEL_LIFT_SUP' in config.keys()): register_file('MODEL_LIFT_SUP',config.MODEL_LIFT_SUP)
+        if ('MODEL_DRAG_SUP' in config.keys()): register_file('MODEL_DRAG_SUP',config.MODEL_DRAG_SUP)
+        if ('MODEL_FORCE_Z_SUP' in config.keys()): register_file('MODEL_FORCE_Z_SUP',config.MODEL_FORCE_Z_SUP)
+        if ('MODEL_MOMENT_Y_SUP' in config.keys()): register_file('MODEL_MOMENT_Y_SUP',config.MODEL_MOMENT_Y_SUP)
+
+        if ('MODEL_LIFT_SUB' in config.keys()): register_file('MODEL_LIFT_SUB',config.MODEL_LIFT_SUB)
+        if ('MODEL_DRAG_SUB' in config.keys()): register_file('MODEL_DRAG_SUB',config.MODEL_DRAG_SUB)
+        if ('MODEL_FORCE_Z_SUB' in config.keys()): register_file('MODEL_FORCE_Z_SUB',config.MODEL_FORCE_Z_SUB)
+        if ('MODEL_MOMENT_Y_SUB' in config.keys()): register_file('MODEL_MOMENT_Y_SUB',config.MODEL_DRAG_SUB)
 
         if ('FARFIELD_FILENAME' in config.keys()): register_file('FARFIELD',config.FARFIELD_FILENAME)
         if ('CONFIG_AERO_FILENAME' in config.keys()):    register_file('CONFIG_AERO',config.CONFIG_AERO_FILENAME)

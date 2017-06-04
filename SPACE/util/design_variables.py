@@ -5,16 +5,11 @@ import numpy as np
 
 class DesignVariables(object):
 
-    def __init__(self, regime='SUP'):
+    def __init__(self, regime = 'SUB'):
 
-        if regime.upper() == 'SUB':
-            mach_range = [0.3, 0.95]
-        else:
-            mach_range = [1.1, 8.0]
+        self.XB_SUB = np.array([
 
-        self.XB = np.array([
-
-            mach_range,         # dv_mach
+            [0.3, 0.95],       # dv_mach
             [-1.0, 1.0],       # dv_re
             [-1.0, 1.0],       # dv_aoa
 
@@ -30,44 +25,80 @@ class DesignVariables(object):
 
         ])
 
-        self.ndim = len(self.XB)
+        self.XB_SUP = np.array([
+
+            [1.1, 8.0],       # dv_mach
+            [-1.0, 1.0],       # dv_re
+            [-1.0, 1.0],       # dv_aoa
+
+            [-0.25, 0.5],      # dv_bf
+            [-0.35, 0.5],      # dv_el
+
+            [-0.5, 0.5],       # dv_geo1
+            [-0.5, 0.5],       # dv_geo2
+            [-0.5, 0.5],       # dv_geo3
+            [-0.2, 0.5],       # dv_geo4
+            [-0.5, 0.5],       # dv_geo5
+            [-0.2, 0.5]        # dv_geo6
+
+        ])
+
+        self.XB = np.array([
+
+            [1.1, 8.0],       # dv_mach
+            [-1.0, 1.0],       # dv_re
+            [-1.0, 1.0],       # dv_aoa
+
+            [-0.25, 0.5],      # dv_bf
+            [-0.35, 0.5],      # dv_el
+
+            [-0.5, 0.5],       # dv_geo1
+            [-0.5, 0.5],       # dv_geo2
+            [-0.5, 0.5],       # dv_geo3
+            [-0.2, 0.5],       # dv_geo4
+            [-0.5, 0.5],       # dv_geo5
+            [-0.2, 0.5]        # dv_geo6
+
+        ])
+
+        self.mach_index = 0    # mach
+        self.aoa_index = 2     # aoa
+        self.trim_index = 3    # bf
+
+        self.ndim = 11
+
+        self.max_mach_sub = self.XB_SUB[self.mach_index][1]
+        self.min_mach_sup = self.XB_SUP[self.mach_index][0]
 
     def unpack(self, config, dvs):
+
+        config_dvs = self.forward_variable_change(dvs)
+
+        print config_dvs
+
+        config.MACH_NUMBER = str(config_dvs[0]); config.REYNOLDS_NUMBER = str(config_dvs[1]); config.AoA= str(config_dvs[2])
+        config.ELEVON_DEF = str(config_dvs[3]); config.BODY_FLAP_DEF = str(config_dvs[4])
+        config.DV1 = str(config_dvs[5]); config.DV2 = str(config_dvs[6]); config.DV3 = str(config_dvs[7]); config.DV4 = str(config_dvs[8]); config.DV5 = str(config_dvs[9]); config.DV6 = str(config_dvs[10])
+
+    def pack(self, config):
+
+        return self.reverse_variable_change([float(config.MACH_NUMBER), float(config.REYNOLDS_NUMBER), float(config.AoA), float(config.BODY_FLAP_DEF), float(config.ELEVON_DEF), float(config.DV1),
+        float(config.DV2), float(config.DV3), float(config.DV4), float(config.DV5), float(config.DV6)])
+
+    def forward_variable_change(self, dvs):
 
         dv_mach = dvs[0]
         dv_re = dvs[1]
         dv_aoa = dvs[2]
         dv_bf = dvs[3]
         dv_el = dvs[4]
+
         dv_geo1 = dvs[5]
         dv_geo2 = dvs[6]
         dv_geo3 = dvs[7]
         dv_geo4 = dvs[8]
         dv_geo5 = dvs[9]
         dv_geo6 = dvs[10]
-
-        Reynolds, AoA = self.forward_variable_change(dv_mach, dv_re, dv_aoa)
-
-        config.DV1 = str(dv_geo1); config.DV2 = str(dv_geo2); config.DV3 = str(dv_geo3); config.DV4 = str(dv_geo4); config.DV5 = str(dv_geo5); config.DV6 = str(dv_geo6)
-        config.ELEVON_DEF = str(dv_el*180.0/np.pi); config.BODY_FLAP_DEF = str(dv_bf*180.0/np.pi)
-        config.MACH_NUMBER = str(dv_mach); config.REYNOLDS_NUMBER = str(Reynolds); config.AoA= str(AoA)
-
-    def pack(self, config):
-
-        dv_mach = float(config.MACH_NUMBER)
-        dv_re, dv_aoa = self.reverse_variable_change(dv_mach, float(config.REYNOLDS_NUMBER), float(config.AoA))
-        dv_bf = float(config.BODY_FLAP_DEF)*np.pi/180.0
-        dv_el = float(config.ELEVON_DEF)*np.pi/180.0
-        dv_geo1 = float(config.DV1)
-        dv_geo2 = float(config.DV2)
-        dv_geo3 = float(config.DV3)
-        dv_geo4 = float(config.DV4)
-        dv_geo5 = float(config.DV5)
-        dv_geo6 = float(config.DV6)
-
-        return [dv_mach,dv_re,dv_aoa,dv_bf,dv_el,dv_geo1,dv_geo2,dv_geo3,dv_geo4,dv_geo5,dv_geo6]
-
-    def forward_variable_change(self, dv_mach, dv_re, dv_aoa):
 
         Reynolds = 10.0**(-3.0/8.0*dv_mach+7.0+dv_re)
 
@@ -76,9 +107,22 @@ class DesignVariables(object):
         else:
             AoA = (dv_aoa+1.0)*7.5 # Subsonic
 
-        return Reynolds, AoA
+        return [dv_mach, Reynolds, AoA, dv_bf*180.0/np.pi, dv_el*180.0/np.pi, dv_geo1, dv_geo2, dv_geo3, dv_geo4, dv_geo5, dv_geo6]
 
-    def reverse_variable_change(self, dv_mach, Reynolds, AoA):
+    def reverse_variable_change(self, config_dvs):
+
+        dv_mach = config_dvs[0]
+        Reynolds = config_dvs[1]
+        AoA = config_dvs[2]
+        Body_Flap = config_dvs[3]
+        Elevon = config_dvs[4]
+
+        dv_geo1 = config_dvs[5]
+        dv_geo2 = config_dvs[6]
+        dv_geo3 = config_dvs[7]
+        dv_geo4 = config_dvs[8]
+        dv_geo5 = config_dvs[9]
+        dv_geo6 = config_dvs[10]
 
         dv_re = np.log10(Reynolds) + 3.0/8.0*dv_mach - 7.0
         
@@ -87,5 +131,5 @@ class DesignVariables(object):
         else:
             dv_aoa = AoA/7.5-1.0 # Subsonic
 
-        return dv_re, dv_aoa
+        return [dv_mach, dv_re, dv_aoa, Body_Flap*np.pi/180.0, Elevon*np.pi/180.0, dv_geo1, dv_geo2, dv_geo3, dv_geo4, dv_geo5, dv_geo6]
 
