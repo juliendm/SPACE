@@ -33,6 +33,10 @@ double eval(char *name, double *point, int size) {
     return surfpack_eval_model(name, point, size);
 }
 
+double gradient(char *name, double *point, double *grad, int size) {
+    surfpack_gradient_model(name, point, grad, size);
+}
+
 double variance(char *name, double *point, int size) {
     return surfpack_variance_model(name, point, size);
 }

@@ -49,16 +49,20 @@ def structure(config):
     ny = float(konfig.ACCELERATION_Y)
     nz = float(konfig.ACCELERATION_Z)
 
+    safetyFactor_thrust = 2.5 # NOT WORKING BELOW THAT
+    safetyFactor_inertial = 2.0 ##################################
+    safetyFactor_non_inertial = 2.0 ##################################
+
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
     gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
 
-    info = spaceload(konfig, loadFactor, gravityVector)
+    info = spaceload(konfig, loadFactor, gravityVector, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
 
     # Material properties
 
     material_rho = float(konfig.MATERIAL_DENSITY)
     material_E = float(konfig.MATERIAL_YOUNG_MODULUS)
-    material_ys = 2e7 #float(konfig.MATERIAL_YIELD_STRENGTH)
+    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH) / 2.0 ##################################
     material_nu = float(konfig.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
@@ -68,8 +72,8 @@ def structure(config):
 
     KSWeight = 80.0
     evalFuncs = ['mass','ks0','mf0']
-    SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
-    #SPs = [StructProblem('lc0', loadFactor=loadFactor, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
+    SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
+    #SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
     numLoadCases = len(SPs)
 
     # Create Solver
@@ -79,7 +83,7 @@ def structure(config):
 
     # Add Design Variables
 
-    corresp = addDVGroups(FEASolver)
+    ndv, corresp = addDVGroups(FEASolver)
 
     def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
         con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
@@ -90,6 +94,8 @@ def structure(config):
 
     FEASolver.createTACSAssembler(conCallBack)
 
+    assert ndv == FEASolver.getNumDesignVars()
+
     # Add Functions
 
     # Mass Functions
@@ -97,9 +103,9 @@ def structure(config):
 
     # KS Functions
     ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
-    #ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, include=RIBS+SPARS+FRAMES+LONGERONS+WING_BOX, loadFactor=loadFactor)
-    #ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=SKIN_U+STRINGERS_U, loadFactor=loadFactor)
-    #ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=SKIN_L+STRINGERS_L, loadFactor=loadFactor)
+    #ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, include=RIBS+SPARS+FRAMES+LONGERONS+WING_BOX, loadFactor=1.0)
+    #ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=SKIN_U+STRINGERS_U, loadFactor=1.0)
+    #ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=SKIN_L+STRINGERS_L, loadFactor=1.0)
 
     #ksef0 = FEASolver.addFunction('ksef0', functions.KSElementFailure, KSWeight=KSWeight)
     #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)
@@ -121,6 +127,12 @@ def structure(config):
         funcs = {}
         FEASolver.setDesignVars(x)
         for i in range(numLoadCases):
+
+            #############################################
+            print 'reading force file'
+            FEASolver.readForceFile(SPs[i])
+            #############################################
+
             FEASolver(SPs[i])
             FEASolver.evalFunctions(SPs[i], funcs)
         if comm.rank == 0:
@@ -174,14 +186,14 @@ def structure(config):
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
         'Iterations limit':100000,
-        'Major iterations limit':3,
+        'Major iterations limit':3000,
         'Minor iterations limit':500,
         'Major step limit':2.0})
     sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
 
     # Write Files
 
-    write_files(config, FEASolver, SPs[0])
+    write_files(config, FEASolver, SPs[0], corresp, loadFactor, gravityVector)
 
     # get history and objectives
 
@@ -203,7 +215,7 @@ def addDVGroups(FEASolver):
     # SKIN
 
     SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','FUSE_R'] # 'CTAIL:LOW','CTAIL_T',
-    SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FLAP_T','FUSE_F']
+    SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FUSE_F'] # 'FLAP_T',
     SKIN_WING_U = ['LWING:UPP','LWING_T::0']
     SKIN_WING_L = ['LWING:LOW','LWING_T::1']
     SKINS = SKIN_FUSE_U + SKIN_FUSE_L + SKIN_WING_U + SKIN_WING_L + ['MSKINC:a','MSKINC:b']
@@ -231,31 +243,47 @@ def addDVGroups(FEASolver):
     assert len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]) == FEASolver.nComp
 
     corresp = [-1 for index in range(FEASolver.nComp)]
-    dv = -1;
+    ndv = 0;
 
-    SKIN_IDS = FEASolver.selectCompIDs(include=SKINS)[0]
-    for i in range(len(SKIN_IDS)):
-        dv_name = "SKIN_" + str(i)
-        FEASolver.addDVGroup(dv_name, include = SKIN_IDS[i])
-        dv = dv+1;
-        corresp[SKIN_IDS[i]] = dv;
+    # SKIN_IDS = FEASolver.selectCompIDs(include=SKINS)[0]
+    # for i in range(len(SKIN_IDS)):
+    #     dv_name = "SKIN_" + str(i)
+    #     FEASolver.addDVGroup(dv_name, include = SKIN_IDS[i])
+    #     ndv = ndv+1;
+    #     corresp[SKIN_IDS[i]] = ndv;
 
-    JUNCTION_IDS = FEASolver.selectCompIDs(include=JUNCTIONS)[0]
-    for i in range(len(JUNCTION_IDS)):
-        dv_name = "JUNCTION_" + str(i)
-        FEASolver.addDVGroup(dv_name, include = JUNCTION_IDS[i])
-        dv = dv+1;
-        corresp[JUNCTION_IDS[i]] = dv;
+    for i in range(len(SKINS)):
+        dv_name = SKINS[i]
+        FEASolver.addDVGroup(dv_name, include = SKINS[i])
+        ndv = ndv+1;
+        SKIN_IDS_I = FEASolver.selectCompIDs(include=SKINS[i])[0]
+        for k in range(len(SKIN_IDS_I)):
+            corresp[SKIN_IDS_I[k]] = ndv;
+
+    # JUNCTION_IDS = FEASolver.selectCompIDs(include=JUNCTIONS)[0]
+    # for i in range(len(JUNCTION_IDS)):
+    #     dv_name = "JUNCTION_" + str(i)
+    #     FEASolver.addDVGroup(dv_name, include = JUNCTION_IDS[i])
+    #     ndv = ndv+1;
+    #     corresp[JUNCTION_IDS[i]] = ndv;
+
+    for i in range(len(JUNCTIONS)):
+        dv_name = JUNCTIONS[i]
+        FEASolver.addDVGroup(dv_name, include = JUNCTIONS[i])
+        ndv = ndv+1;
+        JUNCTIONS_IDS_I = FEASolver.selectCompIDs(include=JUNCTIONS[i])[0]
+        for k in range(len(JUNCTIONS_IDS_I)):
+            corresp[JUNCTIONS_IDS_I[k]] = ndv;
 
     for i in range(len(MEMBERS)):
         dv_name = MEMBERS[i]
         FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
-        dv = dv+1;
+        ndv = ndv+1;
         MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
         for k in range(len(MEMBERS_IDS_I)):
-            corresp[MEMBERS_IDS_I[k]] = dv;
+            corresp[MEMBERS_IDS_I[k]] = ndv;
 
-    return corresp
+    return ndv, corresp
 
     # ncoms = FEASolver.nComp
     # for i in range(0,ncoms):
@@ -263,18 +291,19 @@ def addDVGroups(FEASolver):
     #     FEASolver.addDVGroup(dv_name, include = i)
 
 
-def write_files(config, FEASolver, SP):
+def write_files(config, FEASolver, SP, corresp, loadFactor, gravityVector):
 
     FEASolver.writeBDFForces(SP, "visualize_forces.bdf")
     FEASolver.writeMeshDisplacements(SP, "struct_tacs.sol")
     FEASolver.writeSolution()
 
-    x_final = numpy.zeros(FEASolver.nComp)
+    x_final = numpy.zeros(FEASolver.getNumDesignVars())
     FEASolver.structure.getDesignVars(x_final)
 
     n_point_bdf = 0
     elem_bdf = []
     elem_tag_bdf = []
+
     bdf = open(config.STRUCT + '.bdf')
     for line in bdf:
         data = line.split()
@@ -282,14 +311,15 @@ def write_files(config, FEASolver, SP):
             n_point_bdf += 1
         elif (line[0]=="C" and len(data) == 7):
             elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
-            elem_tag_bdf.append(int(data[2]))
+            elem_tag_bdf.append(int(data[2])) # REASON WHY BDF IS RED AND NOT MESH
     bdf.close()
+
     n_elem_bdf = len(elem_bdf)
     thickness_point = [0.0 for i_point_bdf in range(n_point_bdf)]
     thickness_point_count = [0 for i_point_bdf in range(n_point_bdf)]
     for i_elem_bdf in range(n_elem_bdf):
         for i_node in range(4):
-            thickness_point[elem_bdf[i_elem_bdf][i_node]-1] += x_final[elem_tag_bdf[i_elem_bdf]-1]
+            thickness_point[elem_bdf[i_elem_bdf][i_node]-1] += x_final[corresp[elem_tag_bdf[i_elem_bdf]-1]-1]
             thickness_point_count[elem_bdf[i_elem_bdf][i_node]-1] += 1
     for i_point_bdf in range(n_point_bdf):
         thickness_point[i_point_bdf] = thickness_point[i_point_bdf]/thickness_point_count[i_point_bdf]
@@ -300,7 +330,8 @@ def write_files(config, FEASolver, SP):
     for i in range(len(x_final)):
         dvs.write('%f\n' % x_final[i])
     dvs.close()
-    postprocess(config, x_final)
+
+    #postprocess(config, x_final, loadFactor, gravityVector)
 
 def write_sol_1(sol_file,solution):
  
@@ -311,7 +342,7 @@ def write_sol_1(sol_file,solution):
     sol.write('\nEnd\n')
     sol.close()
 
-def postprocess(config, x_final):
+def postprocess(config, x_final, loadFactor, gravityVector):
 
     # local copy
     konfig = copy.deepcopy(config)
@@ -322,9 +353,6 @@ def postprocess(config, x_final):
     nx = float(konfig.ACCELERATION_X)
     ny = float(konfig.ACCELERATION_Y)
     nz = float(konfig.ACCELERATION_Z)
-
-    loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    gravityVector = -9.81 * numpy.array([-nx/loadFactor,-nz/loadFactor,-ny/loadFactor]) # Change of Frame: to Structure Frame
 
     # Read bdf
 

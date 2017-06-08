@@ -13,7 +13,7 @@ from .. import io  as spaceio
 #  Load Simulation
 # ----------------------------------------------------------------------
 
-def load(config, loadFactor, gravity_vector):
+def load(config, loadFactor, gravity_vector, safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
     # local copy
     konfig = copy.deepcopy(config)
@@ -38,16 +38,16 @@ def load(config, loadFactor, gravity_vector):
 
     # Compute Load
 
-    thrust_vector = np.array([-float(konfig.THRUST), 0.0, 0.0])
+    thrust_vector = np.array([-float(konfig.THRUST), 0.0, 0.0])*safetyFactor_thrust
     thrust_balance = 0.5;
     #thrust_vector = np.array([-154834.16375284, -22797.20321268, 0.0])
     #thrust_balance = 0.0771128158
 
-    payload_vector = gravity_vector*loadFactor*float(konfig.PAYLOAD_MASS)
-    propu_vector = gravity_vector*loadFactor*float(konfig.PROPU_MASS)
-    lox_vector = gravity_vector*loadFactor*float(konfig.LOX_MASS)
-    kero_vector = gravity_vector*loadFactor*float(konfig.KERO_MASS)
-    gnc_vector = gravity_vector*loadFactor*float(konfig.GNC_MASS)
+    payload_vector = gravity_vector*loadFactor*safetyFactor_inertial*float(konfig.PAYLOAD_MASS)
+    propu_vector = gravity_vector*loadFactor*safetyFactor_inertial*float(konfig.PROPU_MASS)
+    lox_vector = gravity_vector*loadFactor*safetyFactor_inertial*float(konfig.LOX_MASS)
+    kero_vector = gravity_vector*loadFactor*safetyFactor_inertial*float(konfig.KERO_MASS)
+    gnc_vector = gravity_vector*loadFactor*safetyFactor_inertial*float(konfig.GNC_MASS)
 
 
     apply_fuse_r, apply_thrust, apply_gnc, apply_kero, apply_payload, apply_lox, apply_propu = get_apply(descriptions, nElem_bdf, elem_tag_bdf, elem_bdf)
@@ -97,13 +97,13 @@ def load(config, loadFactor, gravity_vector):
             
             pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
             for iDim in range(nDim):
-                load_bdf[iPoint_bdf][iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
+                load_bdf[iPoint_bdf][iDim] += normal_bdf[iPoint_bdf][iDim]*pressure * safetyFactor_non_inertial
 
             # Friction
             
             for iDim in range(nDim):
                 shear_stress = float(konfig.P_DYN_INF)*frictionCoeff_bdf[iPoint_bdf][iDim]
-                load_bdf[iPoint_bdf][iDim] += area_bdf[iPoint_bdf]*shear_stress
+                load_bdf[iPoint_bdf][iDim] += area_bdf[iPoint_bdf]*shear_stress * safetyFactor_non_inertial
 
         for iDim in range(nDim):
 

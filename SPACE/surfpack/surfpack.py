@@ -14,6 +14,9 @@ class Surfpack(object):
         self._eval = surfpack_lib.eval
         self._eval.restype = c_double
 
+        self._gradient = surfpack_lib.gradient
+        self._gradient.restype = c_double * ndim
+
         self._variance = surfpack_lib.variance
         self._variance.restype = c_double
 
@@ -62,6 +65,25 @@ class Surfpack(object):
             c_dvs[ix] = dvs[ix];
 
         return self._eval(self.name,c_dvs,self.ndim)
+
+    def gradient(self,dvs):
+
+        if isinstance(dvs, np.ndarray): dvs = dvs.tolist()
+        assert len(dvs) == self.ndim, 'wrong dimension'
+
+        c_dvs = self.array()
+        c_grad = self.array()
+
+        for ix in range(self.ndim):
+            c_dvs[ix] = dvs[ix];
+
+        self._gradient(self.name,c_dvs,c_grad,self.ndim)
+
+        grad = np.zeros(self.ndim)
+        for ix in range(self.ndim):
+            grad[ix] = c_grad[ix];
+
+        return grad
 
     def variance(self,dvs):
 

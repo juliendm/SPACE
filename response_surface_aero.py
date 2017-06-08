@@ -110,7 +110,7 @@ def response_surface( filename          ,
         drag_model.build('kriging')
         moment_y_model.build('kriging')
 
-        for ite in range(0, na): # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        for ite in range(31, na): # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
             if ite%3 == 0:
                 dvs = lift_model.max_variance(desvar.XB_SUP)

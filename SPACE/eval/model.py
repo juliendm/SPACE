@@ -8,6 +8,8 @@ import time, os, gc, sys, shutil, copy, math
 import numpy as np
 import scipy as sp
 
+import pyOpt
+
 from .. import surfpack   as spacesurfpack
 from .. import util       as spacesutil
 
@@ -112,6 +114,27 @@ class AeroModel(object):
 
             return cz_sub + (dvs[self.desvar.mach_index]-self.desvar.max_mach_sub) * (cz_sup-cz_sub)/(self.desvar.min_mach_sup-self.desvar.max_mach_sub);
 
+    def force_z_raw_gradient(self, dvs):
+
+        if dvs[self.desvar.mach_index] <= self.desvar.max_mach_sub:
+
+            return self.force_z_model_sub.gradient(dvs)
+            
+        elif dvs[self.desvar.mach_index] >= self.desvar.min_mach_sup:
+
+            return self.force_z_model_sup.gradient(dvs)
+
+        else:
+
+            dvs_sub = copy.copy(dvs)
+            dvs_sub[self.desvar.mach_index] = self.desvar.max_mach_sub
+            dvs_sup = copy.copy(dvs)
+            dvs_sup[self.desvar.mach_index] = self.desvar.min_mach_sup
+
+            dcz_sub = self.force_z_model_sub.gradient(dvs_sub)
+            dcz_sup = self.force_z_model_sup.gradient(dvs_sup)
+
+            return dcz_sub + (dvs[self.desvar.mach_index]-self.desvar.max_mach_sub) * (dcz_sup-dcz_sub)/(self.desvar.min_mach_sup-self.desvar.max_mach_sub);
 
     def moment_y(self, dvs, ref_origin_x):
 
@@ -135,29 +158,93 @@ class AeroModel(object):
 
             return cmy_sub + (dvs[self.desvar.mach_index]-self.desvar.max_mach_sub) * (cmy_sup-cmy_sub)/(self.desvar.min_mach_sup-self.desvar.max_mach_sub);
 
+    def moment_y_raw_gradient(self, dvs, ref_origin_x):
+
+        if dvs[self.desvar.mach_index] <= self.desvar.max_mach_sub:
+
+            return self.moment_y_model_sub.gradient(dvs) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.gradient(dvs)
+
+        elif dvs[self.desvar.mach_index] >= self.desvar.min_mach_sup:
+
+            return self.moment_y_model_sup.gradient(dvs) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.gradient(dvs)
+
+        else:
+
+            dvs_sub = copy.copy(dvs)
+            dvs_sub[self.desvar.mach_index] = self.desvar.max_mach_sub
+            dvs_sup = copy.copy(dvs)
+            dvs_sup[self.desvar.mach_index] = self.desvar.min_mach_sup
+
+            dcmy_sub = self.moment_y_model_sub.gradient(dvs_sub) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.gradient(dvs_sub)
+            dcmy_sup = self.moment_y_model_sup.gradient(dvs_sup) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.gradient(dvs_sub)
+
+            return dcmy_sub + (dvs[self.desvar.mach_index]-self.desvar.max_mach_sub) * (dcmy_sup-dcmy_sub)/(self.desvar.min_mach_sup-self.desvar.max_mach_sub);
+
+
     def static_margin(self, dvs, ref_origin_x):
 
-        eps = 0.001
+        moment_y_raw_grad = self.moment_y_raw_gradient(dvs,ref_origin_x)
+        force_z_raw_grad = self.force_z_raw_gradient(dvs) 
 
-        config_dvs = self.desvar.forward_variable_change(dvs)
-        config_dvs[self.desvar.aoa_index] = config_dvs[self.desvar.aoa_index] + eps
-        fd_dvs = self.desvar.reverse_variable_change(config_dvs)
+        return - moment_y_raw_grad[self.desvar.aoa_index] / force_z_raw_grad[self.desvar.aoa_index] # * self.desvar.chain_rule_aoa(dvs)/self.desvar.chain_rule_aoa(dvs) CHANGE OF VARIABLES chain rule cancels out
 
-        return - (self.moment_y(fd_dvs,ref_origin_x) - self.moment_y(dvs,ref_origin_x)) / (self.force_z(fd_dvs) - self.force_z(dvs))
+    def k_alpha(self, dvs, ref_origin_x):
+
+        m    = 40000                # (kg), mass
+        Iyy  = 520000               # (kg m2) yy-component of the inertia tensor (in body frame)
+        sref = 113.96               # (m2), aerodynamic reference area 
+        cref = 17                   # (m), aerodynamic reference length (wing chord) 
+        com = 10.421                # (m), position of the center of mass with respect to nose
+
+        return 0.0
 
     def trim(self, dvs, ref_origin_x):
 
         new_dvs = copy.copy(dvs)
 
         def trim_function(x):
-            new_dvs[self.desvar.trim_index] = x[0]
+            new_dvs[self.desvar.bf_index] = x[0]
             return self.moment_y(new_dvs,ref_origin_x)
 
         x0 = sp.optimize.fsolve(trim_function, 0.0)
 
-        new_dvs[self.desvar.trim_index] = x0[0]
+        new_dvs[self.desvar.bf_index] = x0[0]
 
         return new_dvs
+
+    def max_trimmed_efficiency(self, dvs, ref_origin_x):
+
+        new_dvs = copy.copy(dvs)
+
+        def objfunc(x):
+
+            new_dvs[self.desvar.bf_index] = x[0]
+            new_dvs[self.desvar.el_index] = x[1]
+
+            f = -self.lift(new_dvs)/self.drag(new_dvs) # minus sign to Maximize
+
+            g = [self.moment_y(new_dvs,ref_origin_x)]
+
+            fail = 0
+
+            return f,g,fail
+
+        opt_prob = pyOpt.Optimization('Max Trimmed Efficiency', objfunc)
+
+        opt_prob.addObj('Efficiency')
+        opt_prob.addCon('Trim', type='e', equal=0.0)
+
+        opt_prob.addVar('bf','c',lower=self.desvar.bf_bound[0],upper=self.desvar.bf_bound[1],value=0.0)
+        opt_prob.addVar('el','c',lower=self.desvar.el_bound[0],upper=self.desvar.el_bound[1],value=0.0)
+
+        opt = pyOpt.SLSQP()
+        opt.setOption('IPRINT',-1)
+        opt.setOption('ACC',1e-5)
+
+        [Y_min,X_min,Info] = opt(opt_prob, sens_type='FD') # Could Improve sens_type !!!!!!!!!!!
+
+        return -Y_min[0]
+
 
 # ----------------------------------------------------------------------
 #  RangedModel Class

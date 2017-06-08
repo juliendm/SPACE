@@ -75,7 +75,7 @@ def parallel_computation( filename           ,
         X = np.loadtxt(os.path.join(project_folder,'dvs.dat'), delimiter=', ', comments='# ')
         #X = np.loadtxt('dvs.dat', delimiter=', ', comments='# ')
 
-        for index in range(28,len(X)):
+        for index in range(71,len(X)):
 
             dvs = X[index]
             desvar.unpack(konfig, dvs)

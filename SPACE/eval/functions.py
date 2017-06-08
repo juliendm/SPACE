@@ -124,7 +124,7 @@ def aerodynamics(config, state=None):
 
         config_aero.MGLEVEL= '0'
         config_aero.MGCYCLE= 'W_CYCLE'
-        config_aero.EXT_ITER= '2500'
+        config_aero.EXT_ITER= '3000'
 
         if Mach < 2.0:                           # 1.0 - 2.0
             config_aero.CFL_NUMBER= '4.0'

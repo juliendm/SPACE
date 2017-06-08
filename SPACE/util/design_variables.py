@@ -5,7 +5,17 @@ import numpy as np
 
 class DesignVariables(object):
 
-    def __init__(self, regime = 'SUB'):
+    def __init__(self):
+
+        self.ndim = 11
+
+        self.mach_index = 0    # mach
+        self.aoa_index = 2     # aoa
+        self.bf_index = 3      # bf
+        self.el_index = 4      # el
+
+        self.bf_bound = [-0.25, 0.5]
+        self.el_bound = [-0.35, 0.5]
 
         self.XB_SUB = np.array([
 
@@ -13,8 +23,8 @@ class DesignVariables(object):
             [-1.0, 1.0],       # dv_re
             [-1.0, 1.0],       # dv_aoa
 
-            [-0.25, 0.5],      # dv_bf
-            [-0.35, 0.5],      # dv_el
+            self.bf_bound,      # dv_bf
+            self.el_bound,      # dv_el
 
             [-0.5, 0.5],       # dv_geo1
             [-0.5, 0.5],       # dv_geo2
@@ -31,8 +41,8 @@ class DesignVariables(object):
             [-1.0, 1.0],       # dv_re
             [-1.0, 1.0],       # dv_aoa
 
-            [-0.25, 0.5],      # dv_bf
-            [-0.35, 0.5],      # dv_el
+            self.bf_bound,      # dv_bf
+            self.el_bound,      # dv_el
 
             [-0.5, 0.5],       # dv_geo1
             [-0.5, 0.5],       # dv_geo2
@@ -42,30 +52,6 @@ class DesignVariables(object):
             [-0.2, 0.5]        # dv_geo6
 
         ])
-
-        self.XB = np.array([
-
-            [1.1, 8.0],       # dv_mach
-            [-1.0, 1.0],       # dv_re
-            [-1.0, 1.0],       # dv_aoa
-
-            [-0.25, 0.5],      # dv_bf
-            [-0.35, 0.5],      # dv_el
-
-            [-0.5, 0.5],       # dv_geo1
-            [-0.5, 0.5],       # dv_geo2
-            [-0.5, 0.5],       # dv_geo3
-            [-0.2, 0.5],       # dv_geo4
-            [-0.5, 0.5],       # dv_geo5
-            [-0.2, 0.5]        # dv_geo6
-
-        ])
-
-        self.mach_index = 0    # mach
-        self.aoa_index = 2     # aoa
-        self.trim_index = 3    # bf
-
-        self.ndim = 11
 
         self.max_mach_sub = self.XB_SUB[self.mach_index][1]
         self.min_mach_sup = self.XB_SUP[self.mach_index][0]
@@ -132,4 +118,15 @@ class DesignVariables(object):
             dv_aoa = AoA/7.5-1.0 # Subsonic
 
         return [dv_mach, dv_re, dv_aoa, Body_Flap*np.pi/180.0, Elevon*np.pi/180.0, dv_geo1, dv_geo2, dv_geo3, dv_geo4, dv_geo5, dv_geo6]
+
+    def chain_rule_aoa(self, dvs):
+
+        dv_mach = dvs[0]
+
+        if dv_mach >= 1.0:
+            return 1.0/(1.78571*dv_mach+5.71429) # Supersonic
+        else:
+            return 1.0/7.5 # Subsonic
+
+
 
