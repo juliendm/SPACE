@@ -23,8 +23,6 @@ def main():
                       help="read config from FILE", metavar="FILE")
     parser.add_option("-p", "--project", dest="project_folder",
                       help="project folder", metavar="PROJECT_FOLDER")
-    parser.add_option("-r", "--regime", dest="regime", default="SUP",
-                      help="regime", metavar="REGIME")
     parser.add_option("-i", "--initiate", dest="initiate", default="False",
                       help="initiate", metavar="INITIATE")
     parser.add_option("-n", "--partitions", dest="partitions", default=2,
@@ -37,7 +35,6 @@ def main():
 
     response_surface( options.filename       ,
                       options.project_folder ,
-                      options.regime         ,
                       options.initiate       ,
                       options.partitions  )
 
@@ -45,7 +42,6 @@ def main():
 
 def response_surface( filename          ,
                       project_folder    ,
-                      regime = 'SUP'    ,
                       initiate = False  ,
                       partitions  = 0  ):
 
@@ -69,14 +65,20 @@ def response_surface( filename          ,
 
     desvar = DesignVariables()
 
+    XB = desvar.XB_SUB
+    find_next = False
+    ini = 0
+    ini_dsn_folder = None
+
     if initiate:
 
         nd = 10*desvar.ndim
 
-        X = LHC_unif(desvar.XB_SUP,nd)
+        X = LHC_unif(XB,nd)
 
         lift_model = Surfpack('LIFT',desvar.ndim)
         drag_model = Surfpack('DRAG',desvar.ndim)
+        force_z_model = Surfpack('FORCE_Z',desvar.ndim)
         moment_y_model = Surfpack('MOMENT_Y',desvar.ndim)
 
         for index in range(0,len(X)):
@@ -86,15 +88,20 @@ def response_surface( filename          ,
 
             lift_model.add(dvs,project.func('LIFT',konfig))
             drag_model.add(dvs,project.func('DRAG',konfig))
+            force_z_model.add(dvs,project.func('FORCE_Z',konfig))
             moment_y_model.add(dvs,project.func('MOMENT_Y',konfig))
 
         lift_model.save_data(os.path.join(project_folder,'build_points_lift.dat'))
         drag_model.save_data(os.path.join(project_folder,'build_points_drag.dat'))
+        force_z_model.save_data(os.path.join(project_folder,'build_points_force_z.dat'))
         moment_y_model.save_data(os.path.join(project_folder,'build_points_moment_y.dat'))
 
     else:
 
-        na = 500
+        if (find_next):
+            na = ini+1
+        else:
+            na = 500
 
         lift_model = Surfpack('LIFT',desvar.ndim)
         lift_model.load_data(os.path.join(project_folder,'build_points_lift.dat'))
@@ -102,22 +109,43 @@ def response_surface( filename          ,
         drag_model = Surfpack('DRAG',desvar.ndim)
         drag_model.load_data(os.path.join(project_folder,'build_points_drag.dat'))
 
+        force_z_model = Surfpack('FORCE_Z',desvar.ndim)
+        force_z_model.load_data(os.path.join(project_folder,'build_points_drag.dat'))
+
         moment_y_model = Surfpack('MOMENT_Y',desvar.ndim)
         moment_y_model.load_data(os.path.join(project_folder,'build_points_moment_y.dat'))
 
-        # Build Model
-        lift_model.build('kriging')
-        drag_model.build('kriging')
-        moment_y_model.build('kriging')
+        for ite in range(ini,na): # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-        for ite in range(31, na): # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            print 'Ite:', ite
 
             if ite%3 == 0:
-                dvs = lift_model.max_variance(desvar.XB_SUP)
+                current_model = lift_model
             elif ite%3 == 1:
-                dvs = drag_model.max_variance(desvar.XB_SUP)
+                current_model = drag_model
             else:
-                dvs = moment_y_model.max_variance(desvar.XB_SUP)
+                current_model = moment_y_model
+
+            if ite == ini:
+                if (find_next):
+                    current_model.build('kriging')
+                else:
+                    None
+            else:
+                current_model.build('kriging')
+
+            print 'Model built'
+
+            if ite == ini:
+                if (find_next):
+                    dvs = current_model.max_variance(XB)
+                    np.savetxt(os.path.join(project_folder,'next_dvs.dat'), dvs, fmt='%.18e', delimiter=', ', newline='\n', header='', footer='', comments='# ')
+                    break
+                else:
+                    dvs = np.loadtxt(os.path.join(project_folder,'next_dvs.dat'), delimiter=', ', comments='# ')
+            else:
+                dvs = current_model.max_variance(XB)
+                np.savetxt(os.path.join(project_folder,'next_dvs.dat'), dvs, fmt='%.18e', delimiter=', ', newline='\n', header='', footer='', comments='# ')
 
             desvar.unpack(konfig, dvs)
 
@@ -125,7 +153,11 @@ def response_surface( filename          ,
             print dvs
             print '-------------------------------'
 
-            proc = project.func('AERODYNAMICS', konfig)
+            if ite == ini:
+                proc = project.func('AERODYNAMICS', konfig, ini_dsn_folder)
+            else:
+                proc = project.func('AERODYNAMICS', konfig)
+
             new_design_container = project.designs[-1]
 
             proc.wait()
@@ -135,22 +167,27 @@ def response_surface( filename          ,
             if not new_design is None:
                 new_dvs = desvar.pack(new_design.config)
                 new_funcs = new_design.funcs
-                if hasattr(new_funcs,'LIFT') and hasattr(new_funcs,'DRAG') and hasattr(new_funcs,'MOMENT_Y'):
+                if hasattr(new_funcs,'LIFT') and hasattr(new_funcs,'DRAG') and hasattr(new_funcs,'FORCE_Z') and hasattr(new_funcs,'MOMENT_Y'):
                     lift_model.add(new_dvs,new_funcs.LIFT)
                     drag_model.add(new_dvs,new_funcs.DRAG)
+                    force_z_model.add(new_dvs,new_funcs.FORCE_Z)
                     moment_y_model.add(new_dvs,new_funcs.MOMENT_Y)
-
-            # Build Model
-            lift_model.build('kriging')
-            drag_model.build('kriging')
-            moment_y_model.build('kriging')
 
             lift_model.save_data(os.path.join(project_folder,'enriched_points_lift.dat'))
             drag_model.save_data(os.path.join(project_folder,'enriched_points_drag.dat'))
+            force_z_model.save_data(os.path.join(project_folder,'enriched_points_force_z.dat'))
             moment_y_model.save_data(os.path.join(project_folder,'enriched_points_moment_y.dat'))
+
+        # Save Models
+
+        lift_model.build('kriging')
+        drag_model.build('kriging')
+        force_z_model.build('kriging')
+        moment_y_model.build('kriging')
 
         lift_model.save_model(os.path.join(project_folder,'model_lift.sps'))
         drag_model.save_model(os.path.join(project_folder,'model_drag.sps'))
+        force_z_model.save_model(os.path.join(project_folder,'model_force_z.sps'))
         moment_y_model.save_model(os.path.join(project_folder,'model_moment_y.sps'))
 
 #: response_surface()

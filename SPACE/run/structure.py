@@ -193,7 +193,7 @@ def structure(config):
 
     # Write Files
 
-    write_files(config, FEASolver, SPs[0], corresp, loadFactor, gravityVector)
+    write_files(config, FEASolver, SPs[0], corresp, loadFactor, gravityVector, safetyFactor_inertial)
 
     # get history and objectives
 
@@ -291,7 +291,7 @@ def addDVGroups(FEASolver):
     #     FEASolver.addDVGroup(dv_name, include = i)
 
 
-def write_files(config, FEASolver, SP, corresp, loadFactor, gravityVector):
+def write_files(config, FEASolver, SP, corresp, loadFactor, gravityVector, safetyFactor_inertial):
 
     FEASolver.writeBDFForces(SP, "visualize_forces.bdf")
     FEASolver.writeMeshDisplacements(SP, "struct_tacs.sol")
@@ -331,7 +331,7 @@ def write_files(config, FEASolver, SP, corresp, loadFactor, gravityVector):
         dvs.write('%f\n' % x_final[i])
     dvs.close()
 
-    #postprocess(config, x_final, loadFactor, gravityVector)
+    postprocess(config, x_final, loadFactor, gravityVector, safetyFactor_inertial)
 
 def write_sol_1(sol_file,solution):
  
@@ -342,7 +342,7 @@ def write_sol_1(sol_file,solution):
     sol.write('\nEnd\n')
     sol.close()
 
-def postprocess(config, x_final, loadFactor, gravityVector):
+def postprocess(config, x_final, loadFactor, gravityVector, safetyFactor_inertial):
 
     # local copy
     konfig = copy.deepcopy(config)
@@ -442,7 +442,7 @@ def postprocess(config, x_final, loadFactor, gravityVector):
     com = [0.0 for iDim in range(nDim)]
 
     for iElem_bdf in range(nElem_bdf):
-        elem_thickess = x_final[elem_tag_bdf[iElem_bdf]-1]
+        elem_thickess = x_final[corresp[elem_tag_bdf[iElem_bdf]-1]-1]
         elem_mass = area_elem_bdf[iElem_bdf]*elem_thickess*material_rho
         structure_mass += elem_mass
         for iDim in range(nDim):
@@ -483,7 +483,7 @@ def postprocess(config, x_final, loadFactor, gravityVector):
     for iElem_bdf in range(nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
         elem_thickess = x_final[elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in external_forces if computed with additional masses
         elem_mass = area_elem_bdf[iElem_bdf]*elem_thickess*material_rho
-        local_force = elem_mass*gravityVector*loadFactor
+        local_force = elem_mass*gravityVector*loadFactor*safetyFactor_inertial
         for iDim in range(nDim):
             dist[iDim] = center_elem_bdf[iElem_bdf][iDim]-com[iDim]
         pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
@@ -502,7 +502,7 @@ def postprocess(config, x_final, loadFactor, gravityVector):
     postpro.write('Pitch Moment due to Loads: %f\n' % pitch_moment)
     postpro.write('Pitch Moment due to Gravity (Expected Zero): %f\n' % pitch_moment_elem)
 
-    inertial_forces = structure_mass*gravityVector*loadFactor
+    inertial_forces = structure_mass*gravityVector*loadFactor*safetyFactor_inertial
 
     forces_in_non_inertial_frame = external_forces+inertial_forces
     postpro.write('External + Inertial Forces (Expected Zero): %f,%f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1],forces_in_non_inertial_frame[2]))
@@ -510,6 +510,117 @@ def postprocess(config, x_final, loadFactor, gravityVector):
     postpro.close()
 
 #: def postprocess()
+
+
+
+
+def additional_weights_newtons_next_step(weight_newtons_current_step, thrust_newtons):      # MUST DEVIDE BY 2 !!!!!!!!!!!!!!!!!!!!!
+
+
+    pounds_to_newtons = 4.44822
+    newtons_to_pounds = 0.224809
+    meters_to_feet = 3.28084
+
+    weight_pounds_current_step = weight_newtons_current_step*newtons_to_pounds
+    thrust_pounds = thrust_newtons*newtons_to_pounds
+
+
+    # Thermal Protection System Weight
+
+    W_ins = 1.0*newtons_to_pounds
+
+    S_tb = 1.0*meters_to_feet**2.0
+    S_ref = 1.0*meters_to_feet**2.0
+    S_wfh = 1.0*meters_to_feet**2.0
+
+    W_tps = W_ins*(S_tb + S_ref + S_wfh)
+
+    # Landing Gear Weight
+
+    W_gear = 0.00916*weight_pounds_current_step**1.124
+
+    # Total Structural Weight
+
+    W_str_add = W_tps + W_gear
+
+
+
+
+    # Engine Weight                                PROPU_MASS
+
+    N_eng = 1
+    A_ratio = -1.0 # Rocket expansion ratio  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    W_eng = 0.00766*thrust_pounds + 0.00033*thrust_pounds*A_ratio**0.5 + 130*N_eng
+
+    # Tank Weight
+
+    W_tank = rho_tank*V_fuel + insulation*S_tank
+
+    # Total Propulsion Weight
+
+    W_pros = W_tank + W_eng
+
+
+
+
+
+
+    # Hydraulic Weight
+
+    W_hydr = 2.64 * ( ( (S_ref + S_wfv + S_wfh)*pdyn_max/1000)**0.334 * (L_b + W_span)**0.5 )
+
+    # Avionics Weight                              GNC_MASS
+
+    W_avcs = 66.37*weight_pounds_current_step**0.361
+
+    # Electrical System Weight
+
+    L_b = 18.0*meters_to_feet
+    W_elec = 1.167*weight_pounds_current_step**0.5*L_b**0.25
+
+    # Equipment Weight
+
+    W_equip = 10000 + 0.01*(weight_pounds_current_step - 0.0000003)   # WEIRD ???????????????????????
+
+    # Total Subsystem Weight
+
+    W_sub = W_hydr + W_avcs + W_elec + W_equip
+
+
+
+    # Total Vehicle Gross Weight
+
+    return (W_str_add + W_pros + W_sub) * pounds_to_newtons
+
+
+
+    # NOTE:
+    # Missing
+    #  - Payload                                       PAYLOAD_MASS
+    #  - Propellant Weight                             LOX_MASS + KERO_MASS
+    #  - Structure
+
+
+
+#: def additional_masses_next_step()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def isFloat(s):
     try: 

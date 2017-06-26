@@ -156,20 +156,22 @@ class Project(object):
         # project folder redirection, don't overwrite files
         with redirect_folder(folder,pull,link,force=False) as push:        
         
-            # start design
-            design_container = self.new_design_container(konfig)
+            if not args[1] is None:
+                for design_container in self.designs:
+                    if (design_container.folder == args[1].strip()): break
+            else:
+                # start design
+                design_container = self.new_design_container(konfig)
             
             if config.get('CONSOLE','VERBOSE') == 'VERBOSE':
                 print os.path.join(self.folder,design_container.folder)
 
             if design_container.design is None:
-
                 #timestamp = design.state.tic()
 
                 # run design: initialize folder with files
                 pull,link = state.pullnlink(False,config)
                 with redirect_folder(design_container.folder,pull,link,force=True):
-
                     konfig.dump('config_DSN.cfg')
 
                     Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
@@ -189,8 +191,9 @@ class Project(object):
                 spaceio.save_data(filename,self)
 
             else:
-
-                proc = None
+                with redirect_folder(design_container.folder,force=False):
+                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
+                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
 
         # done, return output
         return proc
@@ -206,10 +209,10 @@ class Project(object):
 
 
 
-    def func(self,func_name,config):
+    def func(self,func_name,config,dsn_folder=None):
         func = spaceeval.func
         konfig = copy.deepcopy(config)
-        return self._eval(konfig, func, func_name)
+        return self._eval(konfig, func, func_name, dsn_folder)
     
 
 

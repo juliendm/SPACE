@@ -2,6 +2,7 @@
 
 import time, os, gc, sys, shutil, copy, math
 import numpy as np
+from optparse import OptionParser
 
 import matplotlib.pyplot as plt
 
@@ -10,8 +11,22 @@ import SPACE
 
 def main():
 
-  project_folder = 'RESPONSE_SURFACE_DV_SUP'
-  figures_folder = 'figures_sup'
+  # Command Line Options
+  parser=OptionParser()
+  parser.add_option("-p", "--project", dest="project_folder",
+                    help="project folder", metavar="PROJECT_FOLDER")
+  parser.add_option("-f", "--figures", dest="figures_folder",
+                    help="figures folder", metavar="FIGURES_FOLDER")
+                    
+  (options, args)=parser.parse_args()
+
+  show_history( options.project_folder ,
+                options.figures_folder )
+
+#: main()
+
+def show_history( project_folder ,
+                  figures_folder ):
 
   project = SPACE.io.load_data(project_folder + '/project.pkl')
   project.compile_designs()

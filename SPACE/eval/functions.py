@@ -147,7 +147,7 @@ def aerodynamics(config, state=None):
         
         config_aero.MGLEVEL= '3'
         config_aero.MGCYCLE= 'W_CYCLE'
-        config_aero.EXT_ITER= '2500'
+        config_aero.EXT_ITER= '3000'
 
         config_aero.CFL_NUMBER= '5.0'
 
@@ -159,7 +159,7 @@ def aerodynamics(config, state=None):
 #        config_aero.CFL_ADAPT_PARAM= '( 1.5, 0.5, 2.0, 5.0 )'
 
         config_aero.CONV_CRITERIA= 'CAUCHY'
-        config_aero.CAUCHY_FUNC_FLOW= 'DRAG'
+        config_aero.CAUCHY_FUNC_FLOW= 'LIFT'
         config_aero.CAUCHY_EPS= '1E-4'
         config_aero.CAUCHY_ELEMS= '100'
 

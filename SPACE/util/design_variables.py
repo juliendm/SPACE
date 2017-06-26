@@ -10,6 +10,7 @@ class DesignVariables(object):
         self.ndim = 11
 
         self.mach_index = 0    # mach
+        self.rey_index = 1     # reynolds
         self.aoa_index = 2     # aoa
         self.bf_index = 3      # bf
         self.el_index = 4      # el
@@ -20,7 +21,7 @@ class DesignVariables(object):
         self.XB_SUB = np.array([
 
             [0.3, 0.95],       # dv_mach
-            [-1.0, 1.0],       # dv_re
+            [-1.0, 1.0],       # dv_rey
             [-1.0, 1.0],       # dv_aoa
 
             self.bf_bound,      # dv_bf
@@ -38,7 +39,7 @@ class DesignVariables(object):
         self.XB_SUP = np.array([
 
             [1.1, 8.0],       # dv_mach
-            [-1.0, 1.0],       # dv_re
+            [-1.0, 1.0],       # dv_rey
             [-1.0, 1.0],       # dv_aoa
 
             self.bf_bound,      # dv_bf
@@ -53,17 +54,20 @@ class DesignVariables(object):
 
         ])
 
-        self.max_mach_sub = self.XB_SUB[self.mach_index][1]
-        self.min_mach_sup = self.XB_SUP[self.mach_index][0]
+        self.max_mach_eval_sub = 0.99
+        self.min_mach_eval_sup = 1.01
+
+        # to multiply with raw_grad
+        self.chain_rule_mach = 1.0
+        self.chain_rule_el = np.pi/180.0
+        self.chain_rule_bf = np.pi/180.0
 
     def unpack(self, config, dvs):
 
         config_dvs = self.forward_variable_change(dvs)
 
-        print config_dvs
-
         config.MACH_NUMBER = str(config_dvs[0]); config.REYNOLDS_NUMBER = str(config_dvs[1]); config.AoA= str(config_dvs[2])
-        config.ELEVON_DEF = str(config_dvs[3]); config.BODY_FLAP_DEF = str(config_dvs[4])
+        config.BODY_FLAP_DEF = str(config_dvs[3]); config.ELEVON_DEF = str(config_dvs[4])
         config.DV1 = str(config_dvs[5]); config.DV2 = str(config_dvs[6]); config.DV3 = str(config_dvs[7]); config.DV4 = str(config_dvs[8]); config.DV5 = str(config_dvs[9]); config.DV6 = str(config_dvs[10])
 
     def pack(self, config):
@@ -74,7 +78,7 @@ class DesignVariables(object):
     def forward_variable_change(self, dvs):
 
         dv_mach = dvs[0]
-        dv_re = dvs[1]
+        dv_rey = dvs[1]
         dv_aoa = dvs[2]
         dv_bf = dvs[3]
         dv_el = dvs[4]
@@ -86,7 +90,7 @@ class DesignVariables(object):
         dv_geo5 = dvs[9]
         dv_geo6 = dvs[10]
 
-        Reynolds = 10.0**(-3.0/8.0*dv_mach+7.0+dv_re)
+        Reynolds = 10.0**(-3.0/8.0*dv_mach+7.0+dv_rey)
 
         if dv_mach >= 1.0:
             AoA = 3.92857*dv_mach+3.57143+dv_aoa*(1.78571*dv_mach+5.71429) # Supersonic
@@ -110,14 +114,14 @@ class DesignVariables(object):
         dv_geo5 = config_dvs[9]
         dv_geo6 = config_dvs[10]
 
-        dv_re = np.log10(Reynolds) + 3.0/8.0*dv_mach - 7.0
+        dv_rey = np.log10(Reynolds) + 3.0/8.0*dv_mach - 7.0
         
         if dv_mach >= 1.0:
             dv_aoa = (AoA - (3.92857*dv_mach+3.57143)) / (1.78571*dv_mach+5.71429) # Supersonic
         else:
             dv_aoa = AoA/7.5-1.0 # Subsonic
 
-        return [dv_mach, dv_re, dv_aoa, Body_Flap*np.pi/180.0, Elevon*np.pi/180.0, dv_geo1, dv_geo2, dv_geo3, dv_geo4, dv_geo5, dv_geo6]
+        return [dv_mach, dv_rey, dv_aoa, Body_Flap*np.pi/180.0, Elevon*np.pi/180.0, dv_geo1, dv_geo2, dv_geo3, dv_geo4, dv_geo5, dv_geo6]
 
     def chain_rule_aoa(self, dvs):
 
