@@ -30,6 +30,8 @@ def function(func_name, config, state=None):
             aerodynamics(config, state)
         elif func_name == 'STRUCTURE': # MASS
             structure(config, state)
+        elif func_name == 'FLUID_MESH':
+            fluid_mesh(config, state)
         elif func_name == 'GEOMETRY':
             geometry(config, state)
         else:
@@ -116,8 +118,6 @@ def aerodynamics(config, state=None):
 
     config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
 
-    config.INITIAL_SPACING = str(initial_spacing(config, config_aero))
-
     Mach = float(config.MACH_NUMBER)
 
     if Mach > 1.0:
@@ -187,7 +187,7 @@ def aerodynamics(config, state=None):
 
     # ----------------------------------------------------    
     #  Direct Solution
-    # ----------------------------------------------------    
+    # ----------------------------------------------------  
 
     # redundancy check
     direct_done = all([state.FUNCTIONS.has_key(key) for key in spaceio.optnames_aero[:9]])
@@ -269,7 +269,7 @@ def structure(config, state=None):
 
     # ----------------------------------------------------    
     #  Structure Solution
-    # ----------------------------------------------------    
+    # ----------------------------------------------------   
     
     # redundancy check
     structure_done = all([state.FUNCTIONS.has_key(key) for key in ['MASS']])
@@ -318,7 +318,7 @@ def geometry(config, state=None):
     # ----------------------------------------------------
     #  Initialize    
     # ----------------------------------------------------
-    
+
     # initialize
     state = spaceio.State(state)
     
@@ -328,11 +328,9 @@ def geometry(config, state=None):
     # ----------------------------------------------------    
     #  Geometry Solution
     # ----------------------------------------------------    
-    
+
     # redundancy check
     geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
-
-#    geometry_done = False
 
     if not geometry_done:
 
@@ -359,16 +357,16 @@ def geometry(config, state=None):
                 if 'STRUCT_MESH' in info.FILES:
                     push.append(info.FILES['STRUCT_MESH'])
 
-    # # return output 
-    # geo = spaceutil.ordered_bunch()
-    # for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH']:
-    #     if state.FILES.has_key(key):
-    #         geo[key] = state.FILES[key]
-
     else:
         print 'Geometry done'
 
-    # return geo
+    # return output 
+    geo = spaceutil.ordered_bunch()
+    for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH']:
+        if state.FILES.has_key(key):
+            geo[key] = state.FILES[key]
+
+    return geo
 
 #: def geometry()
 
@@ -378,12 +376,16 @@ def geometry(config, state=None):
 
 def fluid_mesh(config, state=None):
 
+    config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
+    config.INITIAL_SPACING = str(initial_spacing(config, config_aero))
+
     # ----------------------------------------------------
     #  Initialize    
     # ----------------------------------------------------
     
     # initialize
     state = spaceio.State(state)
+
     if not state.FILES.has_key('FARFIELD'):
         state.FILES.FARFIELD = config['FARFIELD_FILENAME']
     
@@ -391,9 +393,15 @@ def fluid_mesh(config, state=None):
     log_fluid_mesh = 'log_fluid_mesh.out'
 
     # ----------------------------------------------------    
+    #  Generate Geometry
+    # ----------------------------------------------------
+
+    geometry(config,state)
+
+    # ----------------------------------------------------    
     #  Fluid Mesh Solution
     # ----------------------------------------------------    
-    
+
     # redundancy check
     fluid_mesh_done = all([state.FILES.has_key(key) for key in ['FLUID_VOLUME_MESH','BOUNDARY_BACK_MESH']])
 
@@ -424,16 +432,18 @@ def fluid_mesh(config, state=None):
                 push.extend([name])
                 push.append(info.FILES['BOUNDARY_BACK_MESH'])
 
-    # # return output 
-    # fluid = spaceutil.ordered_bunch()
-    # for key in [FLUID_VOLUME_MESH']:
-    #     if state.FILES.has_key(key):
-    #         fluid[key] = state.FILES[key]
+
 
     else:
         print 'Fluid Mesh done'
 
-    # return fluid
+    # return output 
+    fluid = spaceutil.ordered_bunch()
+    for key in ['FLUID_VOLUME_MESH','BOUNDARY_BACK_MESH']:
+        if state.FILES.has_key(key):
+            fluid[key] = state.FILES[key]
+
+    return fluid
 
 #: def fluid_mesh()
 

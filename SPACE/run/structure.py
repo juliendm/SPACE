@@ -403,7 +403,7 @@ def postprocess(config, x_final, loadFactor, gravityVector, safetyFactor_inertia
 
     load.close()
 
-    # Area
+    # Area Elem
 
     nNode = 4
 
@@ -514,95 +514,7 @@ def postprocess(config, x_final, loadFactor, gravityVector, safetyFactor_inertia
 
 
 
-def additional_weights_newtons_next_step(weight_newtons_current_step, thrust_newtons):      # MUST DEVIDE BY 2 !!!!!!!!!!!!!!!!!!!!!
 
-
-    pounds_to_newtons = 4.44822
-    newtons_to_pounds = 0.224809
-    meters_to_feet = 3.28084
-
-    weight_pounds_current_step = weight_newtons_current_step*newtons_to_pounds
-    thrust_pounds = thrust_newtons*newtons_to_pounds
-
-
-    # Thermal Protection System Weight
-
-    W_ins = 1.0*newtons_to_pounds
-
-    S_tb = 1.0*meters_to_feet**2.0
-    S_ref = 1.0*meters_to_feet**2.0
-    S_wfh = 1.0*meters_to_feet**2.0
-
-    W_tps = W_ins*(S_tb + S_ref + S_wfh)
-
-    # Landing Gear Weight
-
-    W_gear = 0.00916*weight_pounds_current_step**1.124
-
-    # Total Structural Weight
-
-    W_str_add = W_tps + W_gear
-
-
-
-
-    # Engine Weight                                PROPU_MASS
-
-    N_eng = 1
-    A_ratio = -1.0 # Rocket expansion ratio  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    W_eng = 0.00766*thrust_pounds + 0.00033*thrust_pounds*A_ratio**0.5 + 130*N_eng
-
-    # Tank Weight
-
-    W_tank = rho_tank*V_fuel + insulation*S_tank
-
-    # Total Propulsion Weight
-
-    W_pros = W_tank + W_eng
-
-
-
-
-
-
-    # Hydraulic Weight
-
-    W_hydr = 2.64 * ( ( (S_ref + S_wfv + S_wfh)*pdyn_max/1000)**0.334 * (L_b + W_span)**0.5 )
-
-    # Avionics Weight                              GNC_MASS
-
-    W_avcs = 66.37*weight_pounds_current_step**0.361
-
-    # Electrical System Weight
-
-    L_b = 18.0*meters_to_feet
-    W_elec = 1.167*weight_pounds_current_step**0.5*L_b**0.25
-
-    # Equipment Weight
-
-    W_equip = 10000 + 0.01*(weight_pounds_current_step - 0.0000003)   # WEIRD ???????????????????????
-
-    # Total Subsystem Weight
-
-    W_sub = W_hydr + W_avcs + W_elec + W_equip
-
-
-
-    # Total Vehicle Gross Weight
-
-    return (W_str_add + W_pros + W_sub) * pounds_to_newtons
-
-
-
-    # NOTE:
-    # Missing
-    #  - Payload                                       PAYLOAD_MASS
-    #  - Propellant Weight                             LOX_MASS + KERO_MASS
-    #  - Structure
-
-
-
-#: def additional_masses_next_step()
 
 
 

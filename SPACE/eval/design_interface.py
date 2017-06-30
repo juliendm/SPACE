@@ -37,7 +37,13 @@ def eval_design(func_name, config):
         design = init_design(config)
         save_data(design.filename,design)
 
-    design.func(func_name)
+
+    if func_name == 'AERODYNAMICS':
+        design.func('GEOMETRY')   # this way, will save intermadiate design
+        design.func('FLUID_MESH') # this way, will save intermadiate design
+        design.func(func_name)
+    else:
+        design.func(func_name)
 
 def init_design(config): # At this point, it is already determined that the design don't already exists
     """ starts a new design

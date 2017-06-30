@@ -115,16 +115,6 @@ class Project(object):
         # initialize folder with files
         pull,link = state.pullnlink(True,config)
         with redirect_folder(folder,pull,link,force=True):
-        
-            # look for existing designs
-            folders = glob.glob(self._design_folder)
-            if len(folders)>0:
-                sys.stdout.write('Removing old designs in 10s.')
-                sys.stdout.flush()
-                if warn: time.sleep(10)
-                sys.stdout.write(' Done!\n\n')
-                for f in folders: shutil.rmtree(f)
-            #: if existing designs
             
             # save project
             spaceio.save_data(self.filename,self)
@@ -166,7 +156,7 @@ class Project(object):
             if config.get('CONSOLE','VERBOSE') == 'VERBOSE':
                 print os.path.join(self.folder,design_container.folder)
 
-            if design_container.design is None:
+            if (design_container.design is None) and (args[1] is None):
                 #timestamp = design.state.tic()
 
                 # run design: initialize folder with files

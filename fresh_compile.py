@@ -27,7 +27,14 @@ def main():
 
 def fresh_compile( project_folder ):
 
-    project = SPACE.io.load_data(os.path.join(project_folder,'project.pkl'))
+    if os.path.exists(os.path.join(project_folder,'project.pkl')):
+        project = SPACE.io.load_data(os.path.join(project_folder,'project.pkl'))
+    else:
+        config = SPACE.io.Config('config.cfg')
+        state  = SPACE.io.State()
+        project = SPACE.project.Project(config, state, folder=project_folder)
+
+    
     project.fresh_compile_designs(project_folder=project_folder)
 
 # -------------------------------------------------------------------
