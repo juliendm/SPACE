@@ -191,6 +191,7 @@ def aerodynamics(config, state=None):
 
     # redundancy check
     direct_done = all([state.FUNCTIONS.has_key(key) for key in spaceio.optnames_aero[:9]])
+
     if not direct_done:
     
         config_aero.MESH_FILENAME = config.FLUID_VOLUME + '.su2'

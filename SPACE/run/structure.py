@@ -19,14 +19,12 @@ from pyoptsparse import *
 # from .. import io   as spaceio
 # from .. import util as spaceutil
 # from interface import INT       as SPACE_INT
-# from load      import load      as spaceload
 
 sys.path.append(os.environ['SPACE_RUN'])
 import SPACE
 from SPACE import io   as spaceio
 from SPACE import util as spaceutil
 from SPACE.run.interface import INT       as SPACE_INT
-from SPACE.run.load      import load      as spaceload
 
 
 # ----------------------------------------------------------------------
@@ -42,9 +40,6 @@ def structure(config):
 
     # Load
 
-    spaceutil.surf2sol(konfig)
-    SPACE_INT(konfig)
-
     nx = float(konfig.ACCELERATION_X)
     ny = float(konfig.ACCELERATION_Y)
     nz = float(konfig.ACCELERATION_Z)
@@ -56,7 +51,13 @@ def structure(config):
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
     gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
 
-    info = spaceload(konfig, loadFactor, gravityVector, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    half_thrust_vector = numpy.array([-float(konfig.HALF_THRUST), 0.0, 0.0])
+
+    spaceutil.surf2sol(konfig)
+    SPACE_INT(konfig)
+    load = spaceutil.Load(konfig, loadFactor, gravityVector, float(konfig.HALF_THRUST), half_thrust_vector,  float(konfig.P_DYN_INF), 0.5, 1.0, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    
+    load.update_load(30000)
 
     # Material properties
 
@@ -129,8 +130,9 @@ def structure(config):
         for i in range(numLoadCases):
 
             #############################################
-            print 'reading force file'
-            FEASolver.readForceFile(SPs[i])
+            # print 'reading force file'
+            # load.update_load(30000)
+            # FEASolver.readForceFile(SPs[i])
             #############################################
 
             FEASolver(SPs[i])
@@ -193,7 +195,7 @@ def structure(config):
 
     # Write Files
 
-    write_files(config, FEASolver, SPs[0], corresp, loadFactor, gravityVector, safetyFactor_inertial)
+    write_files(config, FEASolver, SPs[0], corresp, load)
 
     # get history and objectives
 
@@ -291,7 +293,7 @@ def addDVGroups(FEASolver):
     #     FEASolver.addDVGroup(dv_name, include = i)
 
 
-def write_files(config, FEASolver, SP, corresp, loadFactor, gravityVector, safetyFactor_inertial):
+def write_files(config, FEASolver, SP, corresp, load):
 
     FEASolver.writeBDFForces(SP, "visualize_forces.bdf")
     FEASolver.writeMeshDisplacements(SP, "struct_tacs.sol")
@@ -331,7 +333,7 @@ def write_files(config, FEASolver, SP, corresp, loadFactor, gravityVector, safet
         dvs.write('%f\n' % x_final[i])
     dvs.close()
 
-    postprocess(config, x_final, loadFactor, gravityVector, safetyFactor_inertial)
+    postprocess(load, x_final)
 
 def write_sol_1(sol_file,solution):
  
@@ -341,195 +343,6 @@ def write_sol_1(sol_file,solution):
         sol.write(str(solution[i_point]) + "\n")
     sol.write('\nEnd\n')
     sol.close()
-
-def postprocess(config, x_final, loadFactor, gravityVector, safetyFactor_inertial):
-
-    # local copy
-    konfig = copy.deepcopy(config)
-
-    postpro_file = 'postpro.dat'
-    postpro = open(postpro_file,'w')
-
-    nx = float(konfig.ACCELERATION_X)
-    ny = float(konfig.ACCELERATION_Y)
-    nz = float(konfig.ACCELERATION_Z)
-
-    # Read bdf
-
-    coord_bdf = []
-    elem_bdf = []
-    elem_tag_bdf = []
-    descriptions = {}
-    nDv_bdf = 0
-    bdf = open(konfig.STRUCT + '.bdf')
-    for line in bdf:
-        data = line.split()
-        if (line[0]=="$" and len(data) == 3):
-            nDv_bdf += 1
-            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
-        if (line[0]=="G" and len(data) == 6):
-            vec = [float(data[3]), float(data[4].strip('*'))]
-        elif (line[0]=="*" and len(data) == 5):
-            vec.append(float(data[2]))
-            coord_bdf.append(vec)
-        elif (line[0]=="C" and len(data) == 7):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
-            elem_tag_bdf.append(int(data[2]))
-    bdf.close()
-
-    tag_members = []
-    for desc in descriptions.keys():
-        if desc.split(":")[0] in ['RIB','SPAR','STRING','SKIN','FRAME','LONG']:
-            tag_members.append(descriptions[desc])
-
-    nPoint_bdf = len(coord_bdf)
-    nElem_bdf = len(elem_bdf)
-
-    # Read load
-
-    nDim = 3
-
-    load = open(konfig.LOAD_FILENAME)
-
-    data = load.readline().split()
-    nPoint_load = int(data[0])
-
-    forces = [[0.0 for iDim in range(nDim)] for iPoint_load in range(nPoint_load)]
-    for iPoint_load in range(nPoint_load):
-        data = load.readline().split()
-        forces[iPoint_load][0] = float(data[3])
-        forces[iPoint_load][1] = float(data[4])
-        forces[iPoint_load][2] = float(data[5])
-
-    load.close()
-
-    # Area Elem
-
-    nNode = 4
-
-    normal_elem_bdf = [[0.0 for iDim in range(nDim)] for iElem_bdf in range(nElem_bdf)]
-    area_elem_bdf = [0.0 for iElem_bdf in range(nElem_bdf)]
-    vec_a = [0.0 for iDim in range(nDim)] 
-    vec_b = [0.0 for iDim in range(nDim)]
-
-    center_elem_bdf = [[0.0 for iDim in range(nDim)] for iElem_bdf in range(nElem_bdf)]
-
-    for iElem_bdf in range(nElem_bdf):
-        iPoint_0 = elem_bdf[iElem_bdf][0]-1
-        iPoint_1 = elem_bdf[iElem_bdf][1]-1
-        iPoint_2 = elem_bdf[iElem_bdf][2]-1
-        iPoint_3 = elem_bdf[iElem_bdf][3]-1
-        for iDim in range(nDim):
-            vec_a[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_1][iDim]
-            vec_b[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_1][iDim]
-            center_elem_bdf[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
-        normal_elem_bdf[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
-        normal_elem_bdf[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
-        normal_elem_bdf[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
-        for iDim in range(nDim):
-            vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
-            vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
-        normal_elem_bdf[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
-        normal_elem_bdf[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
-        normal_elem_bdf[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
-        area_elem_bdf[iElem_bdf] += numpy.sqrt(normal_elem_bdf[iElem_bdf][0]*normal_elem_bdf[iElem_bdf][0] + normal_elem_bdf[iElem_bdf][1]*normal_elem_bdf[iElem_bdf][1] + normal_elem_bdf[iElem_bdf][2]*normal_elem_bdf[iElem_bdf][2])
-
-    # Mass and Center Of Mass
-
-    material_rho = float(konfig.MATERIAL_DENSITY)
-
-    structure_mass = 0.0
-    com = [0.0 for iDim in range(nDim)]
-
-    for iElem_bdf in range(nElem_bdf):
-        elem_thickess = x_final[corresp[elem_tag_bdf[iElem_bdf]-1]-1]
-        elem_mass = area_elem_bdf[iElem_bdf]*elem_thickess*material_rho
-        structure_mass += elem_mass
-        for iDim in range(nDim):
-            com[iDim] += elem_mass*center_elem_bdf[iElem_bdf][iDim]
-
-    additional_mass = 0.0
-    # for iAdd_mass in range(len(additional_masses)):
-    #   i_mass = additional_masses[iAdd_mass][3]
-    #   additional_mass += i_mass
-    #   for iDim in range(nDim):
-    #     com[iDim] += i_mass*additional_masses[iAdd_mass][iDim]
-
-    for iDim in range(nDim):
-        com[iDim] /= (structure_mass+additional_mass)
-
-
-    postpro.write('Structural Mass: %f\n' % structure_mass)
-    postpro.write('Center of Mass: %f,%f,%f\n' % (com[0],com[1],com[2]))
-
-    # Forces
-
-    external_forces = [0.0 for iDim in range(nDim)] 
-    for iPoint_load in range(nPoint_load):
-        for iDim in range(nDim):
-            external_forces[iDim] += forces[iPoint_load][iDim]
-
-    # Moments (Inertial Forces included in external_forces (additional_mass) will cancel out with the structural_mass Inertial Forces)
-
-    pitch_moment = 0.0
-    dist = [0.0 for iDim in range(nDim)]
-
-    for iPoint_load in range(nPoint_load):
-        for iDim in range(nDim):
-            dist[iDim] = coord_bdf[iPoint_load][iDim]-com[iDim]
-        pitch_moment += (forces[iPoint_load][1]*dist[0]-forces[iPoint_load][0]*dist[1])
-
-    pitch_moment_elem = 0.0
-    for iElem_bdf in range(nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
-        elem_thickess = x_final[elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in external_forces if computed with additional masses
-        elem_mass = area_elem_bdf[iElem_bdf]*elem_thickess*material_rho
-        local_force = elem_mass*gravityVector*loadFactor*safetyFactor_inertial
-        for iDim in range(nDim):
-            dist[iDim] = center_elem_bdf[iElem_bdf][iDim]-com[iDim]
-        pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
-
-    # Conclusion: its fine to compute the pitch with the cog of the structre only !!!!
-    # The inertial forces included in the External loads (which should have normally have no effect on the pitch) will correct for the offset wrt to the actual cog
-
-    # About accounting for point masses as External Load
-    # 3 options to get the pitch:
-    #   - Compute actual cog of spaceship and compute pitch due to External forces only
-    #   - Compute cog of structure only and compute pitch due to External forces + Inertial forces of left asides masses (tanks, etc ...) : pitch due to Inertial forces will correct the wrong placed cog
-    #   - Compute actual cog of spaceship and compute pitch due to External forces + Inertial forces of left asides masses (tanks, etc ...) : pitch due to Inertial forces will cancel out
-
-    # Options 2 and 3 give the same pitch for 2 different cog but same forces distribution ...
-
-    postpro.write('Pitch Moment due to Loads: %f\n' % pitch_moment)
-    postpro.write('Pitch Moment due to Gravity (Expected Zero): %f\n' % pitch_moment_elem)
-
-    inertial_forces = structure_mass*gravityVector*loadFactor*safetyFactor_inertial
-
-    forces_in_non_inertial_frame = external_forces+inertial_forces
-    postpro.write('External + Inertial Forces (Expected Zero): %f,%f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1],forces_in_non_inertial_frame[2]))
-
-    postpro.close()
-
-#: def postprocess()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

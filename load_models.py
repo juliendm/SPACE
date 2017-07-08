@@ -61,7 +61,7 @@ def load_models( filename         ,
 
     konfig = copy.deepcopy(config)
     
-    aero = spacemodel.AeroModel(konfig)
+    aero = spacemodel.AeroModel(konfig,project_folder)
 
     # print aero.static_margin([8.000000e+00,   1.000000e+00,  -1.000000e+00,   2.059314e-01,   5.000000e-01,   5.000000e-01,  -5.000000e-01,   5.000000e-01,  -2.000000e-01,  -5.000000e-01,  -2.000000e-01],11.0)
     # print aero.moment_y([5.710816e+00,   1.000000e+00,  -1.000000e+00,  -2.500000e-01,  -3.500000e-01,  -5.000000e-01,  -5.000000e-01,  -5.000000e-01,  -2.000000e-01,  -5.000000e-01,  -2.000000e-01],11.0)
@@ -80,94 +80,184 @@ def load_models( filename         ,
 
     # Plot
 
-    nx = 300
+    surface = True
 
-    mach_range = [[ 0.0, 8.0]]
-    aoa_range  = [[ 0.0,55.0]]
+    if surface:
 
-    cogs = [11.0] # [10.1,10.3,10.5,10.7,10.9] # 9.6,9.7,9.8,9.9,
+        flag = 'TRIM'
 
-    for cog in cogs:
+        nx = 100
 
-        print cog
+        mach_range = [[ 0.0, 8.0]]
+        aoa_range  = [[ 0.0,55.0]]
 
-        fig = plt.figure()
+        cogs = [10.5] # [10.1,10.3,10.5,10.7,10.9] # 9.6,9.7,9.8,9.9,
+        cog_z = -0.5
 
-        for index in range(len(mach_range)):
+        for cog_x in cogs:
 
-            MACH = np.linspace(mach_range[index][0], mach_range[index][1], nx)
-            AOA = np.linspace(aoa_range[index][0], aoa_range[index][1], nx)
-            MACH, AOA = np.meshgrid(MACH, AOA)
-            COEFF = MACH*0.0
+            fig = plt.figure()
 
-            for ix in range(nx):
-                for iy in range(nx):
+            for index in range(len(mach_range)):
 
-                    dvs = aero.desvar.reverse_variable_change([MACH[ix,iy],1E7,AOA[ix,iy], 0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0])  ##### MUST DO BETTER for Reynolds... Must be the one from trajectory!!! FOR REYNOLDS
-                    dvs[aero.desvar.rey_index] = 0.0 # Force Reynolds to Reference Trajectory
+                MACH = np.linspace(mach_range[index][0], mach_range[index][1], nx)
+                AOA = np.linspace(aoa_range[index][0], aoa_range[index][1], nx)
+                MACH, AOA = np.meshgrid(MACH, AOA)
+                COEFF = MACH*0.0
+
+                for ix in range(nx):
+                    for iy in range(nx):
+
+                        print ix, iy
+
+                        dvs = aero.desvar.reverse_variable_change([MACH[ix,iy],1E7,AOA[ix,iy], 0.0,0.0, -0.5,0.5,0.5,0.5, 0.5,0.5])  ##### MUST DO BETTER for Reynolds... Must be the one from trajectory!!! FOR REYNOLDS
+                        dvs[aero.desvar.rey_index] = 0.0 # Force Reynolds to Reference Trajectory
+
+                        if (dvs[aero.desvar.aoa_index] <= 1.0 and dvs[aero.desvar.aoa_index] >= -1.0):
+
+                            if (flag == 'DRAG'):
+
+                                COEFF[ix,iy] = aero.drag(dvs)
+
+                            elif (flag == 'PITCH'):
+
+                                COEFF[ix,iy] = aero.moment_y(dvs,cog_x,cog_z)
+
+                            elif (flag == 'TRIM'):
+
+                                COEFF[ix,iy] = aero.trim(dvs,cog_x,cog_z)[aero.desvar.el_index]*180.0/np.pi
+                            
+                            elif (flag == 'STATIC_MARGIN'):
+
+                                trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
+                                if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
+                                    COEFF[ix,iy] = aero.static_margin(trimmed_dvs,cog_x,cog_z)
+                                else:
+                                    COEFF[ix,iy] = -float("inf") #float('nan')
+
+                            elif (flag == 'K_ALPHA'):
+
+                                trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
+                                #if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
+                                COEFF[ix,iy] = aero.k_alpha(trimmed_dvs,cog_x,cog_z)
+                                #else:
+                                #    COEFF[ix,iy] = -float("inf") #float('nan')
+                            
+                            elif (flag == 'EFFICIENCY'):
+
+                                COEFF[ix,iy] = aero.max_trimmed_efficiency(dvs,cog_x,cog_z)
+
+                        else:
+
+                            COEFF[ix,iy] = float('NaN')
+
+                if (flag == 'DRAG'):
+
+                    CS = plt.contour(MACH, AOA, COEFF, [0.0, 0.1, 0.2, 0.3])
+
+                elif (flag == 'PITCH'):
+
+                    CS = plt.contour(MACH, AOA, COEFF, [-0.05,-0.04,-0.03,-0.02,-0.01,0.0,0.01,0.02,0.03,0.04,0.05])
+
+                elif (flag == 'TRIM'):
+
+                    levels = [-20.0*0.3, -20.0*0.2, -20.0*0.1, 0.0, 30.0*0.1, 30.0*0.2, 30.0*0.3]; colors = ('r', 'g', 'r')
+                    CS = plt.contour(MACH, AOA, COEFF, levels)
+
+                elif (flag == 'STATIC_MARGIN'):
+
+                    levels = [-0.05, -0.04, -0.03]; colors = ('r', 'g')
+                    CS = plt.contour(MACH, AOA, COEFF, levels)
+
+                elif (flag == 'K_ALPHA'):
+
+                    levels = [1.0, 2.0, 3.0, 4.0]
+                    CS = plt.contour(MACH, AOA, COEFF, levels)
+
+                elif (flag == 'EFFICIENCY'):
+
+                    levels = [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0]
+                    CS = plt.contour(MACH, AOA, COEFF, levels)
+
+                plt.clabel(CS, inline=1, fontsize=10)
+
+            plt.xlabel('Mach', fontsize=18)
+            plt.ylabel('AoA', fontsize=18)
+
+            plt.ylim([0,55])
+            plt.fill_between([0,1], [15,15], [55,55], color='grey', alpha='0.5', zorder=3)
+            plt.fill_between([1,8], [15,55], [55,55], color='grey', alpha='0.5', zorder=3)
+            plt.fill_between([1,8], [0,0], [0,15], color='grey', alpha='0.5', zorder=3)
+
+            fig.savefig(os.path.join(project_folder,'fig_' + str(cog_x) + '.png'))
+            plt.close(fig)
 
 
-                    # # Drag
-                    # COEFF[ix,iy] = aero.drag(dvs)
+    else:
 
-                    # Pitch Moment
-                    COEFF[ix,iy] = aero.moment_y(dvs,cog)
+        mach_vec = [0.3, 0.7, 0.9, 1.2, 1.5, 1.7, 2.0, 3.0, 5.0, 7.0]
+        aoa_range  = [[0.0,15.0],
+                      [0.0,15.0],
+                      [0.0,15.0],
+                      [0.0,15.0],
+                      [0.0,17.0],
+                      [2.5,19.0],
+                      [2.5,20.0],
+                      [5.0,25.0],
+                      [7.5,35.0],
+                      [15.0,40.0]]
 
-                    # # Trim
-                    # COEFF[ix,iy] = aero.trim(dvs,cog)[aero.desvar.el_index]*180.0/np.pi
-                    
-                    # # Static Margin
-                    # trimmed_dvs = aero.trim(dvs,cog)
-                    # if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
-                    #     COEFF[ix,iy] = aero.static_margin(trimmed_dvs,cog)
-                    # else:
-                    #     COEFF[ix,iy] = -float("inf") #float('nan')
+        cog = 9.7
 
-                    # # K alpha
-                    # trimmed_dvs = aero.trim(dvs,cog)
-                    # #if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
-                    # COEFF[ix,iy] = aero.k_alpha(trimmed_dvs,cog)
-                    # #else:
-                    # #    COEFF[ix,iy] = -float("inf") #float('nan')
-                    
-                    # # Efficiency
-                    # COEFF[ix,iy] = aero.max_trimmed_efficiency(dvs,cog)
+        nx = 100
 
-            # # Drag
-            # CS = plt.contour(MACH, AOA, COEFF, [0.0, 0.1, 0.2, 0.3])
+        fig_1 = plt.figure(1)
+        fig_2 = plt.figure(2)
+        fig_3 = plt.figure(3)
 
-            # Pitch Moment
-            CS = plt.contour(MACH, AOA, COEFF, [-0.05,-0.04,-0.03,-0.02,-0.01,0.0,0.01,0.02,0.03,0.04,0.05])
+        for mach_index in range(len(mach_vec)):
 
-            # # Trim
-            # levels = [-float("inf"), -20.0*0.3, 30.0*0.3, float("inf")]; colors = ('r', 'g', 'r')
-            # CS = plt.contour(MACH, AOA, COEFF, levels, colors=colors)
+            mach = mach_vec[mach_index]
 
-            # # Static Margin
-            # levels = [-float("inf"), -0.04, float("inf")]; colors = ('r', 'g')
-            # CS = plt.contour(MACH, AOA, COEFF, levels, colors=colors)
+            aoa_vec = np.linspace(aoa_range[mach_index][0], aoa_range[mach_index][1], nx)
+            lift_vec = np.zeros(len(aoa_vec))
+            drag_vec = np.zeros(len(aoa_vec))
+            moment_y_vec = np.zeros(len(aoa_vec))
 
-            # # K alpha
-            # levels = [1.0, 2.0, 3.0, 4.0]
-            # CS = plt.contour(MACH, AOA, COEFF, levels)
+            for aoa_index in range(len(aoa_vec)):
 
-            # # Efficiency
-            # levels = [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0]
-            # CS = plt.contour(MACH, AOA, COEFF, levels)
+                dvs = aero.desvar.reverse_variable_change([mach,1E7,aoa_vec[aoa_index], 0.0,0.0, -0.5,0.5,0.0,0.0, 0.0,0.0])
+                dvs[aero.desvar.rey_index] = 0.0 # Force Reynolds to Reference Trajectory
 
-            plt.clabel(CS, inline=1, fontsize=10)
+                lift_vec[aoa_index] = aero.lift(dvs)
+                drag_vec[aoa_index] = aero.drag(dvs)
+                moment_y_vec[aoa_index] = aero.moment_y(dvs,9.7,-1.0)
 
-        plt.xlabel('Mach', fontsize=18)
-        plt.ylabel('AoA', fontsize=18)
+            plt.figure(1)
+            plt.plot(aoa_vec,lift_vec)
 
-        plt.ylim([0,55])
-        plt.fill_between([0,1], [15,15], [55,55], color='grey', alpha='0.5', zorder=3)
-        plt.fill_between([1,8], [15,55], [55,55], color='grey', alpha='0.5', zorder=3)
-        plt.fill_between([1,8], [0,0], [0,15], color='grey', alpha='0.5', zorder=3)
+            plt.figure(2)
+            plt.plot(aoa_vec,drag_vec)
 
-        fig.savefig(os.path.join(project_folder,'fig_' + str(cog) + '.png'))
-        plt.close(fig)
+            plt.figure(3)
+            plt.plot(aoa_vec,moment_y_vec)
 
+        plt.figure(1)
+        plt.legend(mach_vec)
+
+        plt.figure(2)
+        plt.legend(mach_vec)
+
+        plt.figure(3)
+        plt.legend(mach_vec)
+
+        fig_1.savefig(os.path.join(project_folder,'fig_lift.png'))
+        fig_2.savefig(os.path.join(project_folder,'fig_drag.png'))
+        fig_3.savefig(os.path.join(project_folder,'fig_moment_y.png'))
+
+        plt.close(fig_1)
+        plt.close(fig_2)
+        plt.close(fig_3)
 
     # # Plot
 

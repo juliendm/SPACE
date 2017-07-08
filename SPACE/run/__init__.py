@@ -18,5 +18,5 @@ from merge       import merge
 from geometry    import geometry
 from fluid_mesh  import fluid_mesh
 from structure   import structure
-from load        import load
 from mission     import mission
+

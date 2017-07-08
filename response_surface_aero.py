@@ -68,7 +68,7 @@ def response_surface( filename          ,
     XB = desvar.XB_SUB
     find_next = False
     ini = 0
-    ini_dsn_folder = None
+    ini_dsn_folder = 'DSN_344'
 
     if initiate:
 

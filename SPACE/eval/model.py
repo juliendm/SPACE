@@ -19,33 +19,40 @@ from .. import util       as spacesutil
 
 class AeroModel(object):
 
-    def __init__(self, config, state=None, folder='MODELS/MDL_*'):
+    def __init__(self, config, folder='MODELS/MDL_*'):
 
         self.config = config
+        self.folder = folder
 
         self.desvar = spacesutil.DesignVariables()
 
         self.lift_model_sub = spacesurfpack.Surfpack('LIFT_SUB',self.desvar.ndim)
-        self.lift_model_sub.load_model(self.config.MODEL_LIFT_SUB)
+        self.lift_model_sub.load_model(os.path.join(self.folder,self.config.MODEL_LIFT_SUB))
         self.lift_model_sup = spacesurfpack.Surfpack('LIFT_SUP',self.desvar.ndim)
-        self.lift_model_sup.load_model(self.config.MODEL_LIFT_SUP)
+        self.lift_model_sup.load_model(os.path.join(self.folder,self.config.MODEL_LIFT_SUP))
 
         self.drag_model_sub = spacesurfpack.Surfpack('DRAG_SUB',self.desvar.ndim)
-        self.drag_model_sub.load_model(self.config.MODEL_DRAG_SUB)
+        self.drag_model_sub.load_model(os.path.join(self.folder,self.config.MODEL_DRAG_SUB))
         self.drag_model_sup = spacesurfpack.Surfpack('DRAG_SUP',self.desvar.ndim)
-        self.drag_model_sup.load_model(self.config.MODEL_DRAG_SUP)
+        self.drag_model_sup.load_model(os.path.join(self.folder,self.config.MODEL_DRAG_SUP))
+
+        self.force_x_model_sub = spacesurfpack.Surfpack('FORCE_X_SUB',self.desvar.ndim)
+        self.force_x_model_sub.load_model(os.path.join(self.folder,self.config.MODEL_FORCE_X_SUB))
+        self.force_x_model_sup = spacesurfpack.Surfpack('FORCE_X_SUP',self.desvar.ndim)
+        self.force_x_model_sup.load_model(os.path.join(self.folder,self.config.MODEL_FORCE_X_SUP))
 
         self.force_z_model_sub = spacesurfpack.Surfpack('FORCE_Z_SUB',self.desvar.ndim)
-        self.force_z_model_sub.load_model(self.config.MODEL_FORCE_Z_SUB)
+        self.force_z_model_sub.load_model(os.path.join(self.folder,self.config.MODEL_FORCE_Z_SUB))
         self.force_z_model_sup = spacesurfpack.Surfpack('FORCE_Z_SUP',self.desvar.ndim)
-        self.force_z_model_sup.load_model(self.config.MODEL_FORCE_Z_SUP)
+        self.force_z_model_sup.load_model(os.path.join(self.folder,self.config.MODEL_FORCE_Z_SUP))
 
         self.moment_y_model_sub = spacesurfpack.Surfpack('MOMENT_Y_SUB',self.desvar.ndim)
-        self.moment_y_model_sub.load_model(self.config.MODEL_MOMENT_Y_SUB)
+        self.moment_y_model_sub.load_model(os.path.join(self.folder,self.config.MODEL_MOMENT_Y_SUB))
         self.moment_y_model_sup = spacesurfpack.Surfpack('MOMENT_Y_SUP',self.desvar.ndim)
-        self.moment_y_model_sup.load_model(self.config.MODEL_MOMENT_Y_SUP)
+        self.moment_y_model_sup.load_model(os.path.join(self.folder,self.config.MODEL_MOMENT_Y_SUP))
 
         self.ref_origin_x_ini = float(self.config.REF_ORIGIN_MOMENT_X)
+        self.ref_origin_z_ini = float(self.config.REF_ORIGIN_MOMENT_Z)
         self.ref_length_moment = float(self.config.REF_LENGTH_MOMENT)
 
 
@@ -87,23 +94,35 @@ class AeroModel(object):
         else:
             return self.interpolate_gradient(dvs,self.force_z_model_sub,self.force_z_model_sup)
 
-    def moment_y(self, dvs, ref_origin_x):
+    def moment_y(self, dvs, ref_origin_x = None, ref_origin_z = None):
 
         if dvs[self.desvar.mach_index] <= self.desvar.max_mach_eval_sub:
-            return self.moment_y_model_sub.eval(dvs) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.eval(dvs)
+            val = self.moment_y_model_sub.eval(dvs)
+            if (ref_origin_x and ref_origin_x != self.ref_origin_x_ini): val += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.eval(dvs)
+            if (ref_origin_z and ref_origin_z != self.ref_origin_z_ini): val -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sub.eval(dvs)
+            return val
         elif dvs[self.desvar.mach_index] >= self.desvar.min_mach_eval_sup:
-            return self.moment_y_model_sup.eval(dvs) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.eval(dvs)
+            val = self.moment_y_model_sup.eval(dvs)
+            if (ref_origin_x and ref_origin_x != self.ref_origin_x_ini): val += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.eval(dvs)
+            if (ref_origin_z and ref_origin_z != self.ref_origin_z_ini): val -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sup.eval(dvs)
+            return val
         else:
-            return self.interpolate_eval(dvs,self.moment_y_model_sub,self.moment_y_model_sup,ref_origin_x,self.force_z_model_sub,self.force_z_model_sup)
+            return self.interpolate_eval(dvs,self.moment_y_model_sub,self.moment_y_model_sup,ref_origin_x,ref_origin_z)
 
-    def moment_y_raw_gradient(self, dvs, ref_origin_x):
+    def moment_y_raw_gradient(self, dvs, ref_origin_x = None, ref_origin_z = None):
 
         if dvs[self.desvar.mach_index] <= self.desvar.max_mach_eval_sub:
-            return self.moment_y_model_sub.gradient(dvs) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.gradient(dvs)
+            val = self.moment_y_model_sub.gradient(dvs)
+            if (ref_origin_x and ref_origin_x != self.ref_origin_x_ini): val += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.gradient(dvs)
+            if (ref_origin_z and ref_origin_z != self.ref_origin_z_ini): val -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sub.gradient(dvs)
+            return val
         elif dvs[self.desvar.mach_index] >= self.desvar.min_mach_eval_sup:
-            return self.moment_y_model_sup.gradient(dvs) + (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.gradient(dvs)
+            val = self.moment_y_model_sup.gradient(dvs)
+            if (ref_origin_x and ref_origin_x != self.ref_origin_x_ini): val += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.gradient(dvs)
+            if (ref_origin_z and ref_origin_z != self.ref_origin_z_ini): val -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sup.gradient(dvs)
+            return val
         else:
-            return self.interpolate_gradient(dvs,self.moment_y_model_sub,self.moment_y_model_sup,ref_origin_x,self.force_z_model_sub,self.force_z_model_sup)
+            return self.interpolate_gradient(dvs,self.moment_y_model_sub,self.moment_y_model_sup,ref_origin_x,ref_origin_z)
 
 
 
@@ -112,16 +131,16 @@ class AeroModel(object):
 
 
 
-    def static_margin(self, dvs, ref_origin_x):
+    def static_margin(self, dvs, ref_origin_x = None, ref_origin_z = None):
 
-        moment_y_raw_grad = self.moment_y_raw_gradient(dvs,ref_origin_x)
+        moment_y_raw_grad = self.moment_y_raw_gradient(dvs,ref_origin_x,ref_origin_z)
         force_z_raw_grad = self.force_z_raw_gradient(dvs) 
 
         return - moment_y_raw_grad[self.desvar.aoa_index] / force_z_raw_grad[self.desvar.aoa_index] # * self.desvar.chain_rule_aoa(dvs)/self.desvar.chain_rule_aoa(dvs) CHANGE OF VARIABLES chain rule cancels out
 
-    def k_alpha(self, dvs, ref_origin_x, static_margin_aug = 0.02):
+    def k_alpha(self, dvs, ref_origin_x = None, ref_origin_z = None, static_margin_aug = 0.02):
 
-        moment_y_raw_grad = self.moment_y_raw_gradient(dvs,ref_origin_x)
+        moment_y_raw_grad = self.moment_y_raw_gradient(dvs,ref_origin_x,ref_origin_z)
         force_z_raw_grad = self.force_z_raw_gradient(dvs)
 
         # eps = 0.00001
@@ -143,13 +162,13 @@ class AeroModel(object):
 
         return (self.static_margin(dvs,ref_origin_x) - static_margin_aug) / ( (moment_y_raw_grad[self.desvar.el_index]*self.desvar.chain_rule_el) / (force_z_raw_grad[self.desvar.aoa_index]*self.desvar.chain_rule_aoa(dvs)) )
 
-    def trim(self, dvs, ref_origin_x):
+    def trim(self, dvs, ref_origin_x = None, ref_origin_z = None):
 
         new_dvs = copy.copy(dvs)
 
         def trim_function(x):
             self.deflections_update(new_dvs,x[0])
-            return self.moment_y(new_dvs,ref_origin_x)
+            return self.moment_y(new_dvs,ref_origin_x,ref_origin_z)
 
         x0 = sp.optimize.fsolve(trim_function, 0.0)
         self.deflections_update(new_dvs,x0[0])
@@ -168,7 +187,7 @@ class AeroModel(object):
             dvs[self.desvar.bf_index] = x
             dvs[self.desvar.el_index] = 0.0
 
-    def max_trimmed_efficiency(self, dvs, ref_origin_x):
+    def max_trimmed_efficiency(self, dvs, ref_origin_x = None, ref_origin_z = None):
 
         new_dvs = copy.copy(dvs)
 
@@ -179,7 +198,7 @@ class AeroModel(object):
 
             f = -self.lift(new_dvs)/self.drag(new_dvs) # minus sign to Maximize
 
-            g = [self.moment_y(new_dvs,ref_origin_x)]
+            g = [self.moment_y(new_dvs,ref_origin_x,ref_origin_z)]
 
             fail = 0
 
@@ -206,7 +225,7 @@ class AeroModel(object):
 
 
 
-    def interpolate_eval(self, dvs, model_sub, model_sup, ref_origin_x=0.0, model_sub_bis=None, model_sup_bis=None):
+    def interpolate_eval(self, dvs, model_sub, model_sup, ref_origin_x = None, ref_origin_z = None):
 
         dvs_sub = copy.copy(dvs)
         dvs_sub[self.desvar.mach_index] = self.desvar.max_mach_eval_sub
@@ -216,12 +235,16 @@ class AeroModel(object):
         coeff_sub = model_sub.eval(dvs_sub)
         coeff_sup = model_sup.eval(dvs_sup)
 
-        if (model_sub_bis): coeff_sub += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * model_sub_bis.eval(dvs_sub)
-        if (model_sup_bis): coeff_sup += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * model_sup_bis.eval(dvs_sup)
+        if (ref_origin_x and ref_origin_x != self.ref_origin_x_ini):
+            coeff_sub += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.eval(dvs)
+            coeff_sup += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.eval(dvs)
+        if (ref_origin_z and ref_origin_z != self.ref_origin_z_ini):
+            coeff_sub -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sub.eval(dvs)
+            coeff_sup -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sup.eval(dvs)
 
         return coeff_sub + (dvs[self.desvar.mach_index]-self.desvar.max_mach_eval_sub) * (coeff_sup-coeff_sub)/(self.desvar.min_mach_eval_sup-self.desvar.max_mach_eval_sub)
 
-    def interpolate_gradient(self, dvs, model_sub, model_sup, ref_origin_x=0.0, model_sub_bis=None, model_sup_bis=None):
+    def interpolate_gradient(self, dvs, model_sub, model_sup, ref_origin_x = None, ref_origin_z = None):
 
         dvs_sub = copy.copy(dvs)
         dvs_sub[self.desvar.mach_index] = self.desvar.max_mach_eval_sub
@@ -231,8 +254,12 @@ class AeroModel(object):
         coeff_sub = model_sub.gradient(dvs_sub)
         coeff_sup = model_sup.gradient(dvs_sup)
 
-        if (model_sub_bis): coeff_sub += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * model_sub_bis.gradient(dvs_sub)
-        if (model_sup_bis): coeff_sup += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * model_sup_bis.gradient(dvs_sup)
+        if (ref_origin_x and ref_origin_x != self.ref_origin_x_ini):
+            coeff_sub += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sub.gradient(dvs)
+            coeff_sup += (ref_origin_x-self.ref_origin_x_ini)/self.ref_length_moment * self.force_z_model_sup.gradient(dvs)
+        if (ref_origin_z and ref_origin_z != self.ref_origin_z_ini):
+            coeff_sub -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sub.gradient(dvs)
+            coeff_sup -= (ref_origin_z-self.ref_origin_z_ini)/self.ref_length_moment * self.force_x_model_sup.gradient(dvs)
 
         return coeff_sub + (dvs[self.desvar.mach_index]-self.desvar.max_mach_eval_sub) * (coeff_sup-coeff_sub)/(self.desvar.min_mach_eval_sup-self.desvar.max_mach_eval_sub)
 

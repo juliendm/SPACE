@@ -7,3 +7,4 @@ from surf2sol            import surf2sol
 from symmetry            import mesh2tri, tri2mesh
 from lhc_unif            import LHC_unif
 from design_variables    import DesignVariables
+from load                import Load

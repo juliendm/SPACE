@@ -1,0 +1,836 @@
+#!/usr/bin/env python2.7
+
+# ----------------------------------------------------------------------
+#  Imports
+# ----------------------------------------------------------------------
+
+import os, time, sys, shutil, copy
+import numpy as np
+
+# ----------------------------------------------------------------------
+#  Load Simulation
+# ----------------------------------------------------------------------
+
+class Load(object):
+
+    def __init__(self, config, loadFactor, gravity_vector, half_thrust, half_thrust_vector, pdyn_inf, thrust_balance = 0.5, fuel_percentage = 1.0, 
+        safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
+
+        self._nDim = 3
+        self._nNode = 4
+
+        self._nFrame = 13
+        self._nLongeron = 4
+
+        self._thrust_frames   = [10]
+        self._avionics_frames = [0,1]
+        self._lox_frames      = [7,8,9,10]
+        self._kero_frames     = [1,2,3]
+        self._engine_frames   = [10,11,16]
+        self._payload_frames  = [3,4,5,6,7]
+
+        self._half_thrust_vector = half_thrust_vector
+        self._thrust_balance = thrust_balance
+
+        self._config = copy.deepcopy(config)
+
+        self._loadFactor = loadFactor
+        self._gravity_vector = gravity_vector
+
+        self._half_thrust_newtons = half_thrust
+        self._pdyn_inf = pdyn_inf
+        self._fuel_percentage = fuel_percentage
+
+        self._safetyFactor_thrust = safetyFactor_thrust
+        self._safetyFactor_inertial = safetyFactor_inertial
+        self._safetyFactor_non_inertial = safetyFactor_non_inertial
+
+        self._material_rho = float(self._config.MATERIAL_DENSITY)
+
+        # Read Meshes
+
+        self._coord_bdf, self._elem_bdf, self._elem_tag_bdf, self._descriptions = read_bdf(self._config , self._nDim, self._nNode) # OML + Structure
+        self._coord, self._elem, self._bdf_corresp                              = read_mesh(self._config, self._nDim, self._nNode) # OML only
+
+        self._nPoint_bdf = len(self._coord_bdf)
+        self._nPoint = len(self._coord)
+
+        self._nElem_bdf = len(self._elem_bdf)
+        self._nElem = len(self._elem)
+
+        # Read Solution
+
+        pressureCoeff, frictionCoeff = read_sol(self._config, self._nDim, self._nNode)  # OML only
+        self._pressureCoeff_bdf = [0.0 for iPoint_bdf in range(self._nPoint_bdf)]
+        self._frictionCoeff_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
+        for iPoint in range(self._nPoint):
+            self._pressureCoeff_bdf[self._bdf_corresp[iPoint]] = pressureCoeff[iPoint]
+            for iDim in range(self._nDim):
+                self._frictionCoeff_bdf[self._bdf_corresp[iPoint]][iDim] = frictionCoeff[iPoint][iDim]
+
+        # Compute Area and Normal
+
+        area, normal = areas_normals_voronoi(self._nDim, self._nNode, self._coord, self._elem)
+        self._area_voronoi = [0.0 for iPoint_bdf in range(self._nPoint_bdf)]
+        self._normal_voronoi = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
+        for iPoint in range(self._nPoint):
+            self._area_voronoi[self._bdf_corresp[iPoint]] = area[iPoint]
+            for iDim in range(self._nDim):
+                self._normal_voronoi[self._bdf_corresp[iPoint]][iDim] = normal[iPoint][iDim]
+
+        self._area_elem, self._normal_elem, self._center_elem = areas_normals_elem(self._nDim, self._nNode, self._coord_bdf, self._elem_bdf)
+
+        # Vehicle Dimensions
+
+        coord_array = np.array(self._coord)
+        self._body_length = 18.0 # abs(max(coord_array[:,0])-min(coord_array[:,0])) # FIXED TO NOT INCLUDE VARIATION DUE TO BODYFLAP !!!!!!!!!!
+        self._wing_span = 2.0*max(abs(coord_array[:,2]))
+
+        # Apply
+
+        self.__compute_apply_noninertial()
+        self.__compute_apply_inertial()
+
+        # Non Inertial Load
+
+        self.__compte_load_noninertial()
+
+        # sum_x = 0.0
+        # sum_y = 0.0
+        # sum_z = 0.0
+        # sum_area = 0.0
+        # for iPoint_bdf in range(nPoint_bdf):
+        #     sum_x += normal_bdf[iPoint_bdf][0]
+        #     sum_y += normal_bdf[iPoint_bdf][1]
+        #     sum_z += normal_bdf[iPoint_bdf][2]
+        #     sum_area += area_bdf[iPoint_bdf]
+        # print sum_x
+        # print sum_y
+        # print sum_z
+        # print sum_area
+
+        # # Control Forces
+
+        # aero_forces = [0.0 for iDim in range(nDim)]
+        # for iPoint_bdf in range(nPoint_bdf):
+
+        #     # Pressure
+            
+        #     pressure = float(konfig.P_DYN_INF)*pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
+        #     for iDim in range(nDim):
+        #         aero_forces[iDim] += normal_bdf[iPoint_bdf][iDim]*pressure
+
+        #     # Friction
+            
+        #     for iDim in range(nDim):
+        #         shear_stress = float(konfig.P_DYN_INF)*frictionCoeff_bdf[iPoint_bdf][iDim]
+        #         aero_forces[iDim] += area_bdf[iPoint_bdf]*shear_stress
+
+        # for iDim in range(nDim):
+        #     aero_forces[iDim] /= float(konfig.P_DYN_INF) * float(konfig.REF_AREA)
+
+        # print "AERO FORCES: ", aero_forces
+
+        # aoa = float(konfig.AoA)*np.pi/180.0
+
+        # lift_coeff = ( -aero_forces[0]*np.sin(aoa) + aero_forces[1]*np.cos(aoa) )
+        # drag_coeff = ( aero_forces[0]*np.cos(aoa) + aero_forces[1]*np.sin(aoa) )
+
+        # print lift_coeff, drag_coeff
+
+
+    def update_load(self, half_mass_kg_current_step):
+
+        self._load_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
+
+        # NON INERTIAL
+
+        for iPoint_bdf in range(self._nPoint_bdf):
+            for iDim in range(self._nDim):
+                self._load_bdf[iPoint_bdf][iDim] = self._load_noninertial_bdf[iPoint_bdf][iDim]
+
+        # INERTIAL
+
+        self.__update_additional_mass(half_mass_kg_current_step)
+
+        for iPoint_bdf in range(self._nPoint_bdf):
+            for iDim in range(self._nDim):
+                self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
+
+
+        # Write load
+        write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf)
+
+        # Write Check
+        write_check(self._load_bdf,self._coord_bdf,self._elem_bdf)
+
+    #: def load()
+
+    def postprocess(self, x_dvs, corresp):
+
+        postpro_file = 'postpro.dat'
+        postpro = open(postpro_file,'w')
+
+        # Mass and Center Of Mass
+
+        self._com = [0.0 for iDim in range(self._nDim)]
+
+        self._structure_mass = 0.0
+        for iElem_bdf in range(self._nElem_bdf):
+            elem_thickess = x_dvs[corresp[self._elem_tag_bdf[iElem_bdf]-1]-1]
+            elem_mass = self._area_elem[iElem_bdf]*elem_thickess*self._material_rho
+            self._structure_mass += elem_mass
+            for iDim in range(self._nDim):
+                self._com[iDim] += elem_mass*self._center_elem[iElem_bdf][iDim]
+
+        self._additional_mass = 0.0
+        for iPoint_bdf in range(self._nPoint_bdf):
+            point_mass = self._additional_mass_bdf[iPoint_bdf]
+            self._additional_mass += point_mass
+            for iDim in range(nDim):
+                self._com[iDim] += point_mass*self._coord_bdf[iPoint_bdf][iDim]
+
+        for iDim in range(nDim):
+            self._com[iDim] /= (self._structure_mass+self._additional_mass)
+
+        postpro.write('Structural Mass: %f\n' % structure_mass)
+        postpro.write('Center of Mass: %f,%f,%f\n' % (com[0],com[1],com[2]))
+
+        # Forces
+
+        external_forces = [0.0 for iDim in range(self._nDim)] 
+        for iPoint_bdf in range(self._nPoint_bdf):
+            for iDim in range(self._nDim):
+                external_forces[iDim] += self._load_bdf[iPoint_bdf][iDim]
+
+        # Moments (Inertial Forces included in external_forces (additional_mass) will cancel out with the structural_mass Inertial Forces)
+
+        pitch_moment = 0.0
+        dist = [0.0 for iDim in range(nDim)]
+
+        for iPoint_bdf in range(self._nPoint_bdf):
+            for iDim in range(self._nDim):
+                dist[iDim] = self._coord_bdf[iPoint_bdf][iDim]-com[iDim]
+            pitch_moment += (self._load_bdf[iPoint_bdf][1]*dist[0]-self._load_bdf[iPoint_bdf][0]*dist[1])
+
+        pitch_moment_elem = 0.0
+        for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
+            elem_thickess = x_final[self._elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in external_forces if computed with additional masses
+            elem_mass = self._area_elem[iElem_bdf]*elem_thickess*material_rho
+            local_force = elem_mass*self._gravityVector*self._loadFactor*self._safetyFactor_inertial
+            for iDim in range(self._nDim):
+                dist[iDim] = self._center_elem[iElem_bdf][iDim]-com[iDim]
+            pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
+
+        # Conclusion: its fine to compute the pitch with the cog of the structre only !!!!
+        # The inertial forces included in the External loads (which should have normally have no effect on the pitch) will correct for the offset wrt to the actual cog
+
+        # About accounting for point masses as External Load
+        # 3 options to get the pitch:
+        #   - Compute actual cog of spaceship and compute pitch due to External forces only
+        #   - Compute cog of structure only and compute pitch due to External forces + Inertial forces of left asides masses (tanks, etc ...) : pitch due to Inertial forces will correct the wrong placed cog
+        #   - Compute actual cog of spaceship and compute pitch due to External forces + Inertial forces of left asides masses (tanks, etc ...) : pitch due to Inertial forces will cancel out
+
+        # Options 2 and 3 give the same pitch for 2 different cog but same forces distribution ...
+
+        postpro.write('Pitch Moment due to Loads: %f\n' % pitch_moment)
+        postpro.write('Pitch Moment due to Gravity (Expected Zero): %f\n' % pitch_moment_elem)
+
+        inertial_forces = structure_mass*gravityVector*loadFactor*safetyFactor_inertial
+
+        forces_in_non_inertial_frame = external_forces+inertial_forces
+        postpro.write('External + Inertial Forces (Expected Zero): %f,%f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1],forces_in_non_inertial_frame[2]))
+
+        postpro.close()
+
+    #: def postprocess()
+
+    def __update_additional_mass(self, half_mass_kg_current_step):
+
+        self.__update_half_additional_mass_kg_next_step(half_mass_kg_current_step)
+
+        self._additional_mass_bdf = [0.0 for iPoint_bdf in range(len(self._coord_bdf))]
+
+        surface_equip = get_apply_surface(self._apply_equip, self._area_voronoi)
+
+        for iPoint_bdf in range(len(self._coord_bdf)):
+
+            # Landing Gear
+
+            if iPoint_bdf in self._apply_gear:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_gear/len(self._apply_gear)
+
+            # Hydraulic
+
+            if iPoint_bdf in self._apply_hydraulic:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_hydraulic/len(self._apply_hydraulic)
+
+            # Avionics
+
+            if iPoint_bdf in self._apply_avionics:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_avionics/len(self._apply_avionics)
+
+            # Electrical System
+
+            if iPoint_bdf in self._apply_elec:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_elec/len(self._apply_elec)
+
+            # Equipment
+
+            if iPoint_bdf in self._apply_equip:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._area_voronoi[iPoint_bdf]*self._half_mass_equip/surface_equip
+
+            # Tank LOX
+
+            if iPoint_bdf in self._apply_lox:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_lox/len(self._apply_lox)
+
+            # Tank KERO
+
+            if iPoint_bdf in self._apply_kero:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_kero/len(self._apply_kero)
+
+            # Engine
+
+            if iPoint_bdf in self._apply_engine:
+
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_engine/len(self._apply_engine)
+
+            # Thermal Protection System
+
+            if iPoint_bdf in self._apply_tps:
+
+                # https://science.ksc.nasa.gov/shuttle/technology/sts-newsref/sts-tps.html
+                # 9 pounds per cubic foot = 144.166 kg/m^3
+                # thickness from 1 inch to 5 inches -> 3 inches = 0.0762 m
+                # generally, the HRSI tiles are thicker at the forward areas of the orbiter and thinner toward the aft end
+
+                density_tps = 144.166 # kg/m^3
+                thickness_tps = 0.0762 # m
+                self._additional_mass_bdf[iPoint_bdf] += self._area_voronoi[iPoint_bdf]*thickness_tps*density_tps
+
+            # Payload
+
+            if iPoint_bdf in self._apply_payload:
+
+                self._additional_mass_bdf[iPoint_bdf] += float(self._config.HALF_PAYLOAD_MASS)/len(self._apply_payload)
+
+
+
+    def __update_half_additional_mass_kg_next_step(self, half_mass_kg_current_step):
+
+        pounds_to_kg = 0.453592
+        newtons_to_pounds = 0.224809
+        kg_to_pounds = 2.20462
+        meters_to_feet = 3.28084
+
+        weight_pounds_current_step = 2.0*half_mass_kg_current_step*kg_to_pounds
+        thrust_pounds = 2.0*self._half_thrust_newtons*newtons_to_pounds
+
+        body_length_feet = self._body_length*meters_to_feet
+        wing_span_feet = self._wing_span*meters_to_feet
+
+        wing_body_surface_square_feet     = 2.0*get_apply_surface(self._apply_wing_body, self._area_voronoi)*meters_to_feet*meters_to_feet
+        elevon_surface_square_feet        = 2.0*get_apply_surface(self._apply_elevon, self._area_voronoi)*meters_to_feet*meters_to_feet
+        body_flap_surface_square_feet     = 2.0*get_apply_surface(self._apply_body_flap, self._area_voronoi)*meters_to_feet*meters_to_feet
+        vertical_tail_surface_square_feet = 2.0*get_apply_surface(self._apply_vertical_tail, self._area_voronoi)*meters_to_feet*meters_to_feet
+
+        N_engines = 1
+        rocket_expansion_ratio = 0.0 #TODO
+
+        rho_tank = 0.0 #TODO
+        V_fuel = 0.0             *2.0 #TODO
+        insulation = 0.0 #TODO
+        S_tank = 0.0             *2.0 #TODO
+
+
+        # Landing Gear Weight
+
+        weight_gear = 0.00916*weight_pounds_current_step**1.124
+        self._half_mass_gear = weight_gear*0.5*pounds_to_kg
+
+        # Hydraulic Weight
+
+        weight_hydraulic = 2.64 * ( ( (wing_body_surface_square_feet + elevon_surface_square_feet + body_flap_surface_square_feet + vertical_tail_surface_square_feet)*self._pdyn_inf/1000.0)**0.334 * (body_length_feet + wing_span_feet)**0.5 )
+        self._half_mass_hydraulic = weight_hydraulic*0.5*pounds_to_kg
+
+        # Avionics Weight
+
+        weight_avionics = 66.37*weight_pounds_current_step**0.361
+        self._half_mass_avionics = weight_avionics*0.5*pounds_to_kg
+
+        # Electrical System Weight
+
+        weight_elec = 1.167*weight_pounds_current_step**0.5*body_length_feet**0.25
+        self._half_mass_elec = weight_elec*0.5*pounds_to_kg
+
+        # Equipment Weight
+
+        weight_equip = 5000.0 + 0.01*weight_pounds_current_step ############## Maybe reduce fixed value
+        self._half_mass_equip = weight_equip*0.5*pounds_to_kg
+
+        # Tank LOX Weight
+
+        weight_tank_lox = rho_tank*V_fuel + insulation*S_tank
+        self._half_mass_lox = weight_tank_lox*0.5*pounds_to_kg          # fuel_percentage #TODO
+
+        # Tank KERO Weight
+
+        weight_tank_kero = rho_tank*V_fuel + insulation*S_tank
+        self._half_mass_kero = weight_tank_kero*0.5*pounds_to_kg        # fuel_percentage #TODO
+
+        # Engine Weight
+
+        weight_engine = 0.00766*thrust_pounds + 0.00033*thrust_pounds*rocket_expansion_ratio**0.5 + 130.0*N_engines
+        self._half_mass_engine = weight_engine*0.5*pounds_to_kg
+
+
+    def __compte_load_noninertial(self):
+
+        self._load_noninertial_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
+
+        # NON INERTIAL
+
+        for iPoint_bdf in range(self._nPoint_bdf):
+
+            # AERO
+
+            if not iPoint_bdf in self._apply_fuse_r:
+
+                # Pressure
+                
+                pressure = self._pdyn_inf*self._pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
+                for iDim in range(self._nDim):
+                    self._load_noninertial_bdf[iPoint_bdf][iDim] += self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial
+
+                # Friction
+                
+                for iDim in range(self._nDim):
+                    shear_stress = self._pdyn_inf*self._frictionCoeff_bdf[iPoint_bdf][iDim]
+                    self._load_noninertial_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress * self._safetyFactor_non_inertial
+
+            # THRUST
+
+            for iDim in range(self._nDim):
+
+                if iPoint_bdf in self._apply_thrust:
+                    index_thrust = self._apply_thrust.index(iPoint_bdf)
+                    if index_thrust == 0:
+                        self._load_noninertial_bdf[iPoint_bdf][iDim] += self._thrust_balance*self._half_thrust_vector[iDim] * self._safetyFactor_thrust
+                    elif index_thrust == 1:
+                        self._load_noninertial_bdf[iPoint_bdf][iDim] += (1.0-self._thrust_balance)*self._half_thrust_vector[iDim] * self._safetyFactor_thrust
+
+
+    def __compute_apply_noninertial(self):
+
+        # THRUST
+
+        tag_thrust_frames = []
+        for i in range(self._nLongeron-1):
+            for j in self._thrust_frames:
+                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                    if desc in self._descriptions.keys():
+                        tag_thrust_frames.append(self._descriptions[desc])
+
+        tag_longerons = []
+        for i in [0]:
+            for j in range(self._nFrame-1):
+                for desc in ['MLONG:%02d:3:%02d' % (i,j), 'MLONG:%02d:4:%02d' % (i,j)]:
+                    if desc in self._descriptions.keys():
+                        tag_longerons.append(self._descriptions[desc])
+
+        tag_members = []
+        tag_skin = []
+        for desc in self._descriptions.keys():
+            if desc.split(":")[0] in ['MRIBF','MRIBV','MRIBW','MSPARF','MSPARV','MSPARC','MSPARW','MSTRINGC','MSTRINGW','MSKINC','MFRAME','MLONG']:
+                tag_members.append(self._descriptions[desc])
+            else:
+                tag_skin.append(self._descriptions[desc])
+
+
+        apply_thrust_frames = tag_to_apply(tag_thrust_frames, self._elem_bdf, self._elem_tag_bdf)
+        apply_longerons     = tag_to_apply(tag_longerons    , self._elem_bdf, self._elem_tag_bdf)
+        apply_skin          = tag_to_apply(tag_skin         , self._elem_bdf, self._elem_tag_bdf)
+
+        self._apply_thrust = intersection(intersection(apply_thrust_frames, apply_longerons), apply_skin)
+
+        # EXHAUST
+
+        tag_fuse_r = []
+        for desc in self._descriptions.keys():
+            if 'FUSE_R' in desc:
+                tag_fuse_r.append(self._descriptions[desc])
+
+        self._apply_fuse_r = tag_to_apply(tag_fuse_r, self._elem_bdf, self._elem_tag_bdf)
+
+    def __compute_apply_inertial(self):
+
+        # TAGS
+
+        tag_longerons = []
+        for i in [0]:
+            for j in range(self._nFrame-1):
+                for desc in ['MLONG:%02d:3:%02d' % (i,j), 'MLONG:%02d:4:%02d' % (i,j)]:
+                    if desc in self._descriptions.keys():
+                        tag_longerons.append(self._descriptions[desc])
+
+        tag_longerons_payload = []
+        for i in [2]:
+            for j in range(self._nFrame-1):
+                for desc in ['MLONG:%02d:3:%02d' % (i,j)]:
+                    if desc in self._descriptions.keys():
+                        tag_longerons_payload.append(self._descriptions[desc])
+
+        tag_avionics_frames = []
+        tag_lox_frames = []
+        tag_kero_frames = []
+        tag_engine_frames = []
+        tag_payload_frames = []
+        for i in range(self._nLongeron-1):
+            for j in self._avionics_frames:
+                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                    if desc in self._descriptions.keys():
+                        tag_avionics_frames.append(self._descriptions[desc])
+            for j in self._lox_frames:
+                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                    if desc in self._descriptions.keys():
+                        tag_lox_frames.append(self._descriptions[desc])
+            for j in self._kero_frames:
+                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                    if desc in self._descriptions.keys():
+                        tag_kero_frames.append(self._descriptions[desc])
+            for j in self._engine_frames:
+                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                    if desc in self._descriptions.keys():
+                        tag_engine_frames.append(self._descriptions[desc])
+            for j in self._payload_frames:
+                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                    if desc in self._descriptions.keys():
+                        tag_payload_frames.append(self._descriptions[desc])
+
+        tag_wing_body = []
+        SKIN_FUSE_L = ['FUSE:BOT','FUSE_F']
+        SKIN_WING_L = ['LWING:LOW','LWING_T::1']
+        SKINS_L = SKIN_FUSE_L + SKIN_WING_L 
+        for desc in self._descriptions.keys():
+            for val in SKINS_L:
+                if val in desc:
+                    tag_wing_body.append(self._descriptions[desc])
+
+        tag_body_flap = []
+        for desc in self._descriptions.keys():
+            for val in ['FLAP:LOW']:
+                if val in desc:
+                    tag_body_flap.append(self._descriptions[desc])
+
+        # APPLY
+
+        self._apply_wing_body     = tag_to_apply(tag_wing_body, self._elem_bdf, self._elem_tag_bdf)
+        self._apply_elevon        = [0] #TODO
+        self._apply_body_flap     = tag_to_apply(tag_body_flap, self._elem_bdf, self._elem_tag_bdf)
+        self._apply_vertical_tail = [0] #TODO
+
+
+        self._apply_tps       = join(join(self._apply_wing_body, self._apply_elevon), self._apply_body_flap)
+        self._apply_equip     = self._apply_wing_body
+
+        apply_longerons         = tag_to_apply(tag_longerons        , self._elem_bdf, self._elem_tag_bdf)
+        apply_longerons_payload = tag_to_apply(tag_longerons_payload, self._elem_bdf, self._elem_tag_bdf)
+
+        apply_avionics_frames = tag_to_apply(tag_avionics_frames, self._elem_bdf, self._elem_tag_bdf)
+
+        apply_lox_frames      = tag_to_apply(tag_lox_frames     , self._elem_bdf, self._elem_tag_bdf)
+        apply_kero_frames     = tag_to_apply(tag_kero_frames    , self._elem_bdf, self._elem_tag_bdf)
+        apply_engine_frames   = tag_to_apply(tag_engine_frames  , self._elem_bdf, self._elem_tag_bdf)
+
+        apply_payload_frames  = tag_to_apply(tag_payload_frames , self._elem_bdf, self._elem_tag_bdf)
+
+
+        self._apply_gear      = [0] #TODO
+        self._apply_hydraulic = [0] #TODO
+        self._apply_avionics  = intersection(apply_avionics_frames, apply_longerons)
+        self._apply_elec      = self._apply_avionics
+
+        self._apply_lox       = intersection(apply_lox_frames     , apply_longerons)
+        self._apply_kero      = intersection(apply_kero_frames    , apply_longerons)
+        self._apply_engine    = intersection(apply_engine_frames  , apply_longerons)
+
+        self._apply_payload   = intersection(apply_payload_frames , apply_longerons_payload)
+
+
+def isInt(s):
+
+    try: 
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+#: def isInt()
+
+def intersection(vec_a, vec_b):
+
+    return [val for val in vec_a if val in vec_b]
+
+#: def intersection()
+
+def join(vec_a, vec_b):
+
+    return np.unique(vec_a + vec_b).tolist()
+
+#: def join()
+
+def tag_to_apply(tag, elem_bdf, elem_tag_bdf):
+
+    apply_list = []
+
+    for iElem_bdf in range(len(elem_bdf)):
+        if elem_tag_bdf[iElem_bdf] in tag:
+            apply_list += (np.array(elem_bdf[iElem_bdf])-1).tolist()
+
+    return np.unique(apply_list).tolist()
+
+#: def tag_to_apply()
+
+def get_apply_surface(apply_list, area_bdf):
+
+    surface = 0.0
+
+    for iPoint_bdf in apply_list:
+        surface += area_bdf[iPoint_bdf]
+
+    return surface
+
+#: get_apply_surface()
+
+def read_bdf(config, nDim, nNode):
+
+    # Read bdf
+    bdf = open(config.STRUCT + '.bdf')
+    coord_bdf = []
+    elem_bdf = []
+    elem_tag_bdf = []
+    descriptions = {}
+    for line in bdf:
+        data = line.split()
+        if (line[0]=="$" and len(data) == 3):
+            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
+        elif (line[0]=="G" and len(data) == 6):
+            vec = [float(data[3]), float(data[4].strip('*'))]
+        elif (line[0]=="*" and len(data) == 5):
+            vec.append(float(data[2]))
+            coord_bdf.append(vec)
+        elif (line[0]=="C" and len(data) == 7):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            elem_tag_bdf.append(int(data[2]))
+    bdf.close()
+
+    return coord_bdf, elem_bdf, elem_tag_bdf, descriptions
+
+#: def read_bdf()
+
+def read_mesh(config, nDim, nNode):
+
+    # Read mesh
+
+    mesh = open(config.STRUCT + '_surface.mesh')
+    line = mesh.readline()
+    while not line.strip() == 'Vertices':
+        line = mesh.readline()
+    nPoint = int(mesh.readline())
+    mesh.readline()
+    coord = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
+    bdf_corresp = [0]*nPoint
+    for iPoint in range(nPoint):
+        data = mesh.readline().split()
+        # DO THE ROTATION + MIRROR
+        coord[iPoint][0] = float(data[0])
+        coord[iPoint][1] = float(data[2])
+        coord[iPoint][2] = float(data[1])
+        bdf_corresp[iPoint] = int(data[3])-1
+    line = mesh.readline()
+    while not isInt(line):
+        line = mesh.readline()
+    nElem = int(line)
+    mesh.readline()
+    elem = [[0 for iNode in range(nNode)] for iElem in range(nElem)]
+    for iElem in range(nElem):
+        data = mesh.readline().split()
+        for iNode in range(nNode):
+            elem[iElem][iNode] = int(data[iNode])-1
+    mesh.close()
+
+    return coord, elem, bdf_corresp
+
+#: def read_mesh()
+
+def read_sol(config, nDim, nNode):
+
+    # Read sol
+    sol = open(config.STRUCT + '_surface.sol')
+    line = sol.readline()
+    while not line.strip() == 'SolAtVertices':
+        line = sol.readline()
+    nPoint = int(sol.readline())
+    sol.readline()
+    sol.readline()
+
+    pressureCoeff = [0.0 for iPoint in range(nPoint)]
+    frictionCoeff = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
+
+    for iPoint in range(nPoint):
+        data = sol.readline().split()
+        pressureCoeff[iPoint] = float(data[0])
+        # DO THE ROTATION + MIRROR
+        frictionCoeff[iPoint][0] = float(data[0+1])
+        frictionCoeff[iPoint][1] = float(data[2+1])
+        frictionCoeff[iPoint][2] = float(data[1+1])
+    sol.close()
+
+    return pressureCoeff, frictionCoeff
+
+#: def read_sol()
+
+
+def write_load(filename,load_bdf,coord_bdf,elem_bdf):
+
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    load = open(filename,'w')
+    load.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
+    for iPoint_bdf in range(nPoint_bdf):
+        load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
+    for iElem_bdf in range(nElem_bdf):
+        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+    load.close()
+
+#: def write_load()
+
+def write_check(load_bdf,coord_bdf,elem_bdf):
+
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    load_mesh = open('struct_load.mesh', 'w')
+    load_mesh.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nVertices\n' + str(nPoint_bdf) + '\n\n')
+    for iPoint_bdf in range(nPoint_bdf):
+        load_mesh.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(iPoint_bdf+1) + "\n")
+    load_mesh.write('\nQuadrilaterals\n' + str(nElem_bdf) + '\n\n')
+    for iElem_bdf in range(nElem_bdf):
+        load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + " 0\n")
+    load_mesh.write('\nEnd\n')
+    load_mesh.close()
+
+    load_sol = open('struct_load.sol', 'w')
+    load_sol.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nSolAtVertices\n' + str(nPoint_bdf) + '\n3 1 1 1\n')
+    for iPoint_bdf in range(nPoint_bdf):
+        load_sol.write(str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
+    load_sol.write('\nEnd\n')
+    load_sol.close()
+
+#: def write_check()
+
+def areas_normals_elem(nDim, nNode, coord_bdf, elem_bdf):
+
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    normal = [[0.0 for iDim in range(nDim)] for iElem_bdf in range(nElem_bdf)]
+    area = [0.0 for iElem_bdf in range(nElem_bdf)]
+
+    vec_a = [0.0 for iDim in range(nDim)] 
+    vec_b = [0.0 for iDim in range(nDim)]
+
+    center = [[0.0 for iDim in range(nDim)] for iElem_bdf in range(nElem_bdf)]
+
+    # Normal and Area Elem
+
+    for iElem_bdf in range(nElem_bdf):
+        iPoint_0 = elem_bdf[iElem_bdf][0]-1
+        iPoint_1 = elem_bdf[iElem_bdf][1]-1
+        iPoint_2 = elem_bdf[iElem_bdf][2]-1
+        iPoint_3 = elem_bdf[iElem_bdf][3]-1
+        for iDim in range(nDim):
+            vec_a[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_1][iDim]
+            vec_b[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_1][iDim]
+            center[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
+        normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+        normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+        normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+        for iDim in range(nDim):
+            vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
+            vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
+        normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+        normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+        normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+        area[iElem_bdf] += np.sqrt(normal[iElem_bdf][0]*normal[iElem_bdf][0] + normal[iElem_bdf][1]*normal[iElem_bdf][1] + normal[iElem_bdf][2]*normal[iElem_bdf][2])
+
+    return area, normal, center
+
+#: def areas_elem()
+
+def areas_normals_voronoi(nDim, nNode, coord, elem):
+
+    nPoint = len(coord)
+    nElem = len(elem)
+
+    normal = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
+    area = [0.0 for iPoint in range(nPoint)]
+
+    coordElemCG = [[0.0 for iDim in range(nDim)] for iElem in range(nElem)]
+    coordEdgeCG = [0.0 for iDim in range(nDim)]
+    vec_a = [0.0 for iDim in range(nDim)] 
+    vec_b = [0.0 for iDim in range(nDim)] 
+
+    # coordElemCG
+
+    for iElem in range(nElem):
+        for iNode in range(nNode):
+            iPoint = elem[iElem][iNode]
+            for iDim in range(nDim):
+                coordElemCG[iElem][iDim] += coord[iPoint][iDim];
+
+    for iElem in range(nElem):
+        for iDim in range(nDim):
+            coordElemCG[iElem][iDim] /= nNode * 1.0
+
+    # Normal and Area Voronoi
+
+    nNeighnour = 2
+    for iElem in range(nElem):
+        for iNode in range(nNode):
+            iPoint = elem[iElem][iNode]
+            for iNeighbour in range(nNeighnour):
+                jNode = (iNode + 1 - nNeighnour * iNeighbour) % nNode
+                jPoint = elem[iElem][jNode]
+                for iDim in range(nDim):
+                    coordEdgeCG[iDim] = 0.5 * (coord[iPoint][iDim] + coord[jPoint][iDim])
+                if (iNeighbour == 0):
+                    for iDim in range(nDim):
+                        vec_a[iDim] = coord[iPoint][iDim]-coordElemCG[iElem][iDim]
+                        vec_b[iDim] = coordEdgeCG[iDim]-coordElemCG[iElem][iDim]
+                else:
+                    for iDim in range(nDim):
+                        vec_a[iDim] = coord[iPoint][iDim]-coordEdgeCG[iDim]
+                        vec_b[iDim] = coordElemCG[iElem][iDim]-coordEdgeCG[iDim]
+                normal[iPoint][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+                normal[iPoint][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+                normal[iPoint][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+
+    for iPoint in range(nPoint):
+        area[iPoint] = (normal[iPoint][0]**2.0+normal[iPoint][1]**2.0+normal[iPoint][2]**2.0)**0.5
+
+    return area, normal
+
+#: def areas_normals()
+
+
+

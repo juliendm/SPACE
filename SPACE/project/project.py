@@ -61,6 +61,9 @@ class Project(object):
         if ('MODEL_DRAG_SUP' in config.keys()):
             if 'MODEL_DRAG_SUP' not in state.FILES:
                 raise Exception , 'Could not find mesh file: %s' % config.MODEL_DRAG_SUP
+        if ('MODEL_FORCE_X_SUP' in config.keys()):
+            if 'MODEL_FORCE_X_SUP' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_FORCE_X_SUP
         if ('MODEL_FORCE_Z_SUP' in config.keys()):
             if 'MODEL_FORCE_Z_SUP' not in state.FILES:
                 raise Exception , 'Could not find mesh file: %s' % config.MODEL_FORCE_Z_SUP
@@ -74,6 +77,9 @@ class Project(object):
         if ('MODEL_DRAG_SUB' in config.keys()):
             if 'MODEL_DRAG_SUB' not in state.FILES:
                 raise Exception , 'Could not find mesh file: %s' % config.MODEL_DRAG_SUB
+        if ('MODEL_FORCE_X_SUB' in config.keys()):
+            if 'MODEL_FORCE_X_SUB' not in state.FILES:
+                raise Exception , 'Could not find mesh file: %s' % config.MODEL_FORCE_X_SUB
         if ('MODEL_FORCE_Z_SUB' in config.keys()):
             if 'MODEL_FORCE_Z_SUB' not in state.FILES:
                 raise Exception , 'Could not find mesh file: %s' % config.MODEL_FORCE_Z_SUB
