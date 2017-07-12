@@ -42,30 +42,34 @@ def geometry ( config ):
     pgm.dv6 = float(konfig.DV6)
     pgm.body_flap_deflection = float(konfig.BODY_FLAP_DEF)
 
-    bse = pgm.initialize()
+    # FLUID
 
+    pgm.tail = False
+    bse = pgm.initialize()
     pgm.comps['lwing'].set_airfoil('profile_1.dat')
     pgm.comps['rwing'].set_airfoil('profile_37.dat')
     pgm.comps['flap'].set_airfoil('profile_cs.dat')
-
     pgm.compute_all()
-    pgm.compute_normals()
-    pgm.compute_all()
+    # pgm.compute_normals()
+    # pgm.compute_all()
 
-    # bse.vec['pt_str']._hidden[:] = False
+    # Export Mesh
     bse.vec['pt_str'].export_MESH(konfig.FLUID_SURFACE + '_back.mesh')
-
-    # Close Geometry
     SPACE_MRG(konfig)
-
-    # Redo mesh
     SPACE_SUR(konfig)
 
-    # bse.vec['pt_str'].export_tec_str()
-    # bse.vec['pt_str'].export_STL()
-    # bse.vec['cp_str'].export_IGES()
+    # STRUCTURE
     
-    if konfig.STRUCT != 'NONE': pgm.meshStructure(konfig.STRUCT)
+    if konfig.STRUCT != 'NONE':
+
+        pgm.tail = True
+        bse = pgm.initialize()
+        pgm.comps['lwing'].set_airfoil('profile_1.dat')
+        pgm.comps['rwing'].set_airfoil('profile_37.dat')
+        pgm.comps['flap'].set_airfoil('profile_cs.dat')
+        pgm.compute_all()
+
+        pgm.meshStructure(konfig.STRUCT)
 
     # info out
     info = spaceio.State()
@@ -84,21 +88,21 @@ class Spaceplane(PGMconfiguration):
         this.comps['fuse'] = PGMbody(num_x=14, num_y=4, num_z=8) #num_x is the number of surfacees
         this.comps['lwing'] = PGMwing(num_x=9, num_z=12, left_closed=True)
         this.comps['rwing'] = PGMwing(num_x=9, num_z=12, right_closed=True)
-        #this.comps['ctail'] = PGMwing(num_x=3, num_z=4, left_closed=True)
+        if this.tail: this.comps['ctail'] = PGMwing(num_x=3, num_z=4, left_closed=True)
         this.comps['flap'] = PGMwing(num_x=6, num_z=4, left_closed=True)
 
         this.comps['fuse_f'] = PGMcone(this, 'fuse', 'front', 7.0)
         this.comps['fuse_r'] = PGMcone(this, 'fuse', 'rear', 3.0)
         this.comps['lwing_t'] = PGMtip(this, 'lwing', 'left', 0.1)
         this.comps['rwing_t'] = PGMtip(this, 'rwing', 'right', 0.1)
-        #this.comps['ctail_t'] = PGMtip(this, 'ctail', 'left', 3.0)
+        if this.tail: this.comps['ctail_t'] = PGMtip(this, 'ctail', 'left', 3.0)
       #  this.comps['flap_t'] = PGMtip(this, 'flap', 'left', 0.1)
 
         #this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'bot', 'E', [0,1], 'lwing', 'right')
         this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,1], 'lwing', 'right')
 
         #this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,2], 'rwing', 'left')
-        #this.comps['ctail_fuse'] = PGMjunction(this, 'fuse', 'top', 'E', [3,9], 'ctail', 'right')
+        if this.tail: this.comps['ctail_fuse'] = PGMjunction(this, 'fuse', 'top', 'E', [3,9], 'ctail', 'right')
 
         this.comps['flap_fuse'] = PGMjunction(this, 'fuse', 'bot', 'S', [12,0], 'flap', 'right')
 
@@ -126,11 +130,12 @@ class Spaceplane(PGMconfiguration):
         rwing['pos'].params['lin'] = PGMparameter(3, 3, order_u=2)
         rwing['scl'].params[''] = PGMparameter(3, 3, order_u=2)
 
-        #ctail = this.comps['ctail'].props
-        #ctail['pos'].params[''] = PGMparameter(1, 3)
-        #ctail['pos'].params['lin'] = PGMparameter(2, 3)
-        #ctail['scl'].params[''] = PGMparameter(2, 3)
-        #ctail['nor'].params[''] = PGMparameter(1, 3)
+        if this.tail:
+            ctail = this.comps['ctail'].props
+            ctail['pos'].params[''] = PGMparameter(1, 3)
+            ctail['pos'].params['lin'] = PGMparameter(2, 3)
+            ctail['scl'].params[''] = PGMparameter(2, 3)
+            ctail['nor'].params[''] = PGMparameter(1, 3)
 
         flap = this.comps['flap'].props
         flap['pos'].params[''] = PGMparameter(1, 3)
@@ -182,17 +187,18 @@ class Spaceplane(PGMconfiguration):
 
         # tails
 
-        #tail_root_origin_x = 13.3 - 0.3 ################
-        #tail_tip_origin_x = 16.3 - 0.8 ################
-        #tail_length_root = 4.1 - 0.2 ################
-        #tail_length_tip = 2.5
-        #tail_height = 3.8
+        if this.tail:
+            tail_root_origin_x = 13.3 ################
+            tail_tip_origin_x = 16.3 - 0.8 ################
+            tail_length_root = 4.1 - 0.2 ################
+            tail_length_tip = 2.5
+            tail_height = 3.8
 
-        #ctail = this.comps['ctail'].props
-        #ctail['pos'].params[''].val([tail_root_origin_x+nose_origin_x,fuse_radius,0.0])
-        #ctail['pos'].params['lin'].val([[0,0,0],[tail_tip_origin_x-tail_root_origin_x,tail_height,0.0]])
-        #ctail['scl'].params[''].val([[tail_length_root,3.0,1.0],[tail_length_tip,3.0,1.0]])
-        #ctail['nor'].params[''].val([1.0,0.0,0.0])
+            ctail = this.comps['ctail'].props
+            ctail['pos'].params[''].val([tail_root_origin_x+nose_origin_x,fuse_radius,0.0])
+            ctail['pos'].params['lin'].val([[0,0,0],[tail_tip_origin_x-tail_root_origin_x,tail_height,0.0]])
+            ctail['scl'].params[''].val([[tail_length_root,3.0,1.0],[tail_length_tip,3.0,1.0]])
+            ctail['nor'].params[''].val([1.0,0.0,0.0])
 
         # flap
 
@@ -266,14 +272,15 @@ class Spaceplane(PGMconfiguration):
             afm.addCtr('MSKINC:b:%02d' % (i),'lwing','rwing',1,[1-idims[i],1-idims[i+1]])
         afm.addCtrVert('MSPARC:%02d' % (idims.shape[0]),'lwing','rwing',0.9)
 
-        # idims = np.linspace(0.25,0.65,2)
-        # jdims = np.linspace(0,0.9,10)
-        # for i in range(idims.shape[0]-1):
-        #     for j in range(jdims.shape[0]):
-        #         afm.addVertFlip('MRIBV:%02d:%02d' % (j,i),'ctail',[idims[i],jdims[j]],[idims[i+1],jdims[j]])
-        # for i in range(idims.shape[0]):
-        #     for j in range(jdims.shape[0]-1):
-        #         afm.addVertFlip('MSPARV:%02d:%02d' % (i,j),'ctail',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
+        if this.tail:
+            idims = np.array([0.2,0.4,0.8])
+            jdims = np.linspace(0.0,0.95,10)
+            for i in range(idims.shape[0]-1):
+                for j in range(jdims.shape[0]):
+                    afm.addVertFlip('MRIBV:%02d:%02d' % (j,i),'ctail',[idims[i],jdims[j]],[idims[i+1],jdims[j]])
+            for i in range(idims.shape[0]):
+                for j in range(jdims.shape[0]-1):
+                    afm.addVertFlip('MSPARV:%02d:%02d' % (i,j),'ctail',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
 
         idims = np.linspace(0.15,0.85,4)
         jdims = np.linspace(0.0,1.0,8)

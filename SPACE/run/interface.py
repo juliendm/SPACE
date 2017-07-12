@@ -130,14 +130,15 @@ def SUR(config):
     """
     konfig = copy.deepcopy(config)
     
-    yams = open(konfig.FLUID_SURFACE + '_back.yams',"w")
-    #yams.write('Absolute\nGradation 1.1\nMinSize 0.01\nMaxsize 0.2\nGeomApp 0.001\n')
-    yams.write('Absolute\nGradation 1.3\nMinSize 0.01\nMaxsize 0.25\nGeomApp 0.005\n')
-    yams.close()
+    # yams = open(konfig.FLUID_SURFACE + '_back.yams',"w")
+    # #yams.write('Absolute\nGradation 1.1\nMinSize 0.01\nMaxsize 0.2\nGeomApp 0.001\n')
+    # yams.write('Absolute\nGradation 1.3\nMinSize 0.01\nMaxsize 0.25\nGeomApp 0.005\n')
+    # yams.close()
 
     #os.system('yams2 -f -O -1 -in ' + konfig.FLUID_SURFACE + '_back.mesh -out ' + konfig.FLUID_SURFACE + '.mesh > log_yams.out')
     
     #os.system('yams2 -f -O 0 -in ' + konfig.FLUID_SURFACE + '.mesh -out ' + konfig.FLUID_SURFACE + '.mesh >> log_yams.out')
+    
     shutil.copy(konfig.FLUID_SURFACE + '_back.mesh', konfig.FLUID_SURFACE + '.mesh')
 
     return

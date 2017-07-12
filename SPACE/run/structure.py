@@ -57,7 +57,9 @@ def structure(config):
     SPACE_INT(konfig)
     load = spaceutil.Load(konfig, loadFactor, gravityVector, float(konfig.HALF_THRUST), half_thrust_vector,  float(konfig.P_DYN_INF), 0.5, 1.0, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
     
-    load.update_load(30000)
+
+    load.update(30000)
+
 
     # Material properties
 
@@ -67,7 +69,7 @@ def structure(config):
     material_nu = float(konfig.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
-    t = 1.0
+    t = 0.011
     tMin = 0.0016 # 0.0016
     tMax = 3.0 # 0.020
 
@@ -123,6 +125,15 @@ def structure(config):
     history_filename = 'history_structure.dat'
     history_iteration = {'val':0}
 
+
+
+
+
+    x_final = numpy.zeros(FEASolver.getNumDesignVars())
+    FEASolver.structure.getDesignVars(x_final)
+    load.postprocess(x_final, corresp)
+
+
     def obj(x):
         '''Evaluate the objective and constraints'''
         funcs = {}
@@ -130,9 +141,9 @@ def structure(config):
         for i in range(numLoadCases):
 
             #############################################
-            # print 'reading force file'
-            # load.update_load(30000)
-            # FEASolver.readForceFile(SPs[i])
+            load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
+            load.update(load._structure_mass+load._additional_mass)
+            SPs[i].loadFile = konfig.LOAD_FILENAME   # Reset loadFile to read it again
             #############################################
 
             FEASolver(SPs[i])
@@ -205,7 +216,7 @@ def structure(config):
 
     # info out
 
-    info = spaceio.State(info)
+    info = spaceio.State()
     info.FUNCTIONS.update(outputs)
 
     return info
@@ -216,7 +227,7 @@ def addDVGroups(FEASolver):
 
     # SKIN
 
-    SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','FUSE_R'] # 'CTAIL:LOW','CTAIL_T',
+    SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','FUSE_R','CTAIL:LOW','CTAIL_T::1']
     SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FUSE_F'] # 'FLAP_T',
     SKIN_WING_U = ['LWING:UPP','LWING_T::0']
     SKIN_WING_L = ['LWING:LOW','LWING_T::1']
@@ -224,7 +235,7 @@ def addDVGroups(FEASolver):
 
     # JUNCTIONS
 
-    JUNCTIONS = ['FLAP_FUSE','LWING_FUSE'] # 'CTAIL_FUSE'
+    JUNCTIONS = ['FLAP_FUSE','LWING_FUSE','CTAIL_FUSE']
 
     # MEMBERS
 
@@ -232,10 +243,10 @@ def addDVGroups(FEASolver):
         'MFRAME:10','MFRAME:11','MFRAME:12']
     LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
     RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
-        # 'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
+        'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
         'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
     SPARS = ['MSPARF:00','MSPARF:01', # 'MSPARF:02','MSPARF:03',
-        # 'MSPARV:00','MSPARV:01',
+        'MSPARV:00','MSPARV:01','MSPARV:02',
         'MSPARC:00','MSPARC:04','MSPARC:05',
         'MSPARW:00','MSPARW:02','MSPARW:08'] # 'MSPARW:09'
     STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03',
@@ -333,7 +344,7 @@ def write_files(config, FEASolver, SP, corresp, load):
         dvs.write('%f\n' % x_final[i])
     dvs.close()
 
-    postprocess(load, x_final)
+    load.postprocess(x_final, corresp)
 
 def write_sol_1(sol_file,solution):
  

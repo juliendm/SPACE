@@ -38,8 +38,8 @@ def eval_design(func_name, config):
         save_data(design.filename,design)
 
     ##################
-    # config = SPACE.io.Config('config_DSN.cfg')
-    # design.config = config
+    config = SPACE.io.Config('config_DSN.cfg')
+    design.config = config
     ##################
 
     if func_name == 'AERODYNAMICS':

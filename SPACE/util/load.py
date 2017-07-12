@@ -24,8 +24,8 @@ class Load(object):
 
         self._thrust_frames   = [10]
         self._avionics_frames = [0,1]
-        self._lox_frames      = [7,8,9,10]
-        self._kero_frames     = [1,2,3]
+        self._lox_frames      = [7,10]
+        self._kero_frames     = [1,3]
         self._engine_frames   = [10,11,16]
         self._payload_frames  = [3,4,5,6,7]
 
@@ -45,7 +45,12 @@ class Load(object):
         self._safetyFactor_inertial = safetyFactor_inertial
         self._safetyFactor_non_inertial = safetyFactor_non_inertial
 
+
         self._material_rho = float(self._config.MATERIAL_DENSITY)
+
+        self._half_mass_payload = float(self._config.HALF_PAYLOAD_MASS)
+        self._half_mass_fuel_kero = float(self._config.HALF_KERO_MASS)
+        self._half_mass_fuel_lox = float(self._config.HALF_LOX_MASS)
 
         # Read Meshes
 
@@ -139,7 +144,7 @@ class Load(object):
         # print lift_coeff, drag_coeff
 
 
-    def update_load(self, half_mass_kg_current_step):
+    def update(self, half_mass_kg_current_step):
 
         self._load_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
 
@@ -157,23 +162,19 @@ class Load(object):
             for iDim in range(self._nDim):
                 self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
 
-
         # Write load
         write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf)
 
-        # Write Check
-        write_check(self._load_bdf,self._coord_bdf,self._elem_bdf)
+        # # Write Check
+        # write_check(self._load_bdf,self._coord_bdf,self._elem_bdf)
 
     #: def load()
 
     def postprocess(self, x_dvs, corresp):
 
-        postpro_file = 'postpro.dat'
-        postpro = open(postpro_file,'w')
-
         # Mass and Center Of Mass
 
-        self._com = [0.0 for iDim in range(self._nDim)]
+        self._center_of_mass = [0.0 for iDim in range(self._nDim)]
 
         self._structure_mass = 0.0
         for iElem_bdf in range(self._nElem_bdf):
@@ -181,46 +182,49 @@ class Load(object):
             elem_mass = self._area_elem[iElem_bdf]*elem_thickess*self._material_rho
             self._structure_mass += elem_mass
             for iDim in range(self._nDim):
-                self._com[iDim] += elem_mass*self._center_elem[iElem_bdf][iDim]
+                self._center_of_mass[iDim] += elem_mass*self._center_elem[iElem_bdf][iDim]
 
         self._additional_mass = 0.0
         for iPoint_bdf in range(self._nPoint_bdf):
             point_mass = self._additional_mass_bdf[iPoint_bdf]
             self._additional_mass += point_mass
-            for iDim in range(nDim):
-                self._com[iDim] += point_mass*self._coord_bdf[iPoint_bdf][iDim]
+            for iDim in range(self._nDim):
+                self._center_of_mass[iDim] += point_mass*self._coord_bdf[iPoint_bdf][iDim]
 
-        for iDim in range(nDim):
-            self._com[iDim] /= (self._structure_mass+self._additional_mass)
-
-        postpro.write('Structural Mass: %f\n' % structure_mass)
-        postpro.write('Center of Mass: %f,%f,%f\n' % (com[0],com[1],com[2]))
+        for iDim in range(self._nDim):
+            self._center_of_mass[iDim] /= (self._structure_mass+self._additional_mass)
 
         # Forces
 
-        external_forces = [0.0 for iDim in range(self._nDim)] 
+        inertial_forces = self._structure_mass*self._gravity_vector*self._loadFactor*self._safetyFactor_inertial
+
+        non_inertial_forces = [0.0 for iDim in range(self._nDim)] 
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
-                external_forces[iDim] += self._load_bdf[iPoint_bdf][iDim]
+                non_inertial_forces[iDim] += self._load_noninertial_bdf[iPoint_bdf][iDim]
 
-        # Moments (Inertial Forces included in external_forces (additional_mass) will cancel out with the structural_mass Inertial Forces)
+        # Moments (Inertial Forces included in non_inertial_forces (additional_mass) would cancel out with the structural_mass Inertial Forces)
 
         pitch_moment = 0.0
-        dist = [0.0 for iDim in range(nDim)]
-
+        dist = [0.0 for iDim in range(self._nDim)]
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
-                dist[iDim] = self._coord_bdf[iPoint_bdf][iDim]-com[iDim]
-            pitch_moment += (self._load_bdf[iPoint_bdf][1]*dist[0]-self._load_bdf[iPoint_bdf][0]*dist[1])
+                dist[iDim] = self._coord_bdf[iPoint_bdf][iDim]-self._center_of_mass[iDim]
+            pitch_moment += (self._load_noninertial_bdf[iPoint_bdf][1]*dist[0]-self._load_noninertial_bdf[iPoint_bdf][0]*dist[1])
 
-        pitch_moment_elem = 0.0
-        for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
-            elem_thickess = x_final[self._elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in external_forces if computed with additional masses
-            elem_mass = self._area_elem[iElem_bdf]*elem_thickess*material_rho
-            local_force = elem_mass*self._gravityVector*self._loadFactor*self._safetyFactor_inertial
-            for iDim in range(self._nDim):
-                dist[iDim] = self._center_elem[iElem_bdf][iDim]-com[iDim]
-            pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
+
+        # Distance Center Of Gravity - Center Of Pressure
+
+        self._dist_cog_cop = pitch_moment/np.sqrt(non_inertial_forces[0]*non_inertial_forces[0]+non_inertial_forces[1]*non_inertial_forces[1]+non_inertial_forces[2]*non_inertial_forces[2])
+
+        # pitch_moment_elem = 0.0
+        # for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
+        #     elem_thickess = x_final[self._elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in non_inertial_forces if computed with additional masses
+        #     elem_mass = self._area_elem[iElem_bdf]*elem_thickess*material_rho
+        #     local_force = elem_mass*self._gravityVector*self._loadFactor*self._safetyFactor_inertial
+        #     for iDim in range(self._nDim):
+        #         dist[iDim] = self._center_elem[iElem_bdf][iDim]-com[iDim]
+        #     pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
 
         # Conclusion: its fine to compute the pitch with the cog of the structre only !!!!
         # The inertial forces included in the External loads (which should have normally have no effect on the pitch) will correct for the offset wrt to the actual cog
@@ -233,13 +237,20 @@ class Load(object):
 
         # Options 2 and 3 give the same pitch for 2 different cog but same forces distribution ...
 
-        postpro.write('Pitch Moment due to Loads: %f\n' % pitch_moment)
-        postpro.write('Pitch Moment due to Gravity (Expected Zero): %f\n' % pitch_moment_elem)
 
-        inertial_forces = structure_mass*gravityVector*loadFactor*safetyFactor_inertial
 
-        forces_in_non_inertial_frame = external_forces+inertial_forces
-        postpro.write('External + Inertial Forces (Expected Zero): %f,%f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1],forces_in_non_inertial_frame[2]))
+        postpro_file = 'postpro.dat'
+        postpro = open(postpro_file,'w')
+
+        postpro.write('Structural Mass: %f\n' % self._structure_mass)
+        postpro.write('Additional Mass: %f\n' % self._additional_mass)
+        postpro.write('Mass: %f\n' % (self._structure_mass+self._additional_mass))
+        postpro.write('Center of Mass: %f,%f,%f\n' % (self._center_of_mass[0],self._center_of_mass[1],self._center_of_mass[2]))
+        postpro.write('Distance Center Of Gravity - Center Of Pressure: %f\n' % self._dist_cog_cop)
+        #postpro.write('Pitch Moment due to Gravity (Expected Zero): %f\n' % pitch_moment_elem)
+
+        forces_in_non_inertial_frame = non_inertial_forces+inertial_forces
+        postpro.write('Non Inertial + Inertial Forces (Expected Zero): %f,%f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1],forces_in_non_inertial_frame[2]))
 
         postpro.close()
 
@@ -289,13 +300,27 @@ class Load(object):
 
             if iPoint_bdf in self._apply_lox:
 
-                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_lox/len(self._apply_lox)
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_tank_lox/len(self._apply_lox)
+
+            # Fuel LOX - Note: Assume fluid-air interface always perpendicular to longitudinal axe
+
+            if iPoint_bdf in self._apply_lox_front:
+                self._additional_mass_bdf[iPoint_bdf] += (self._fuel_percentage*0.5)*self._fuel_percentage*self._half_mass_fuel_lox/len(self._apply_lox_front)
+            if iPoint_bdf in self._apply_lox_rear:
+                self._additional_mass_bdf[iPoint_bdf] += (1.0-self._fuel_percentage*0.5)*self._fuel_percentage*self._half_mass_fuel_lox/len(self._apply_lox_rear)
 
             # Tank KERO
 
             if iPoint_bdf in self._apply_kero:
 
-                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_kero/len(self._apply_kero)
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_tank_kero/len(self._apply_kero)
+
+            # Fuel KERO - Note: Assume fluid-air interface always perpendicular to longitudinal axe
+
+            if iPoint_bdf in self._apply_kero_front:
+                self._additional_mass_bdf[iPoint_bdf] += (self._fuel_percentage*0.5)*self._fuel_percentage*self._half_mass_fuel_kero/len(self._apply_kero_front)
+            if iPoint_bdf in self._apply_kero_rear:
+                self._additional_mass_bdf[iPoint_bdf] += (1.0-self._fuel_percentage*0.5)*self._fuel_percentage*self._half_mass_fuel_kero/len(self._apply_kero_rear)
 
             # Engine
 
@@ -320,7 +345,7 @@ class Load(object):
 
             if iPoint_bdf in self._apply_payload:
 
-                self._additional_mass_bdf[iPoint_bdf] += float(self._config.HALF_PAYLOAD_MASS)/len(self._apply_payload)
+                self._additional_mass_bdf[iPoint_bdf] += self._half_mass_payload/len(self._apply_payload)
 
 
 
@@ -337,19 +362,27 @@ class Load(object):
         body_length_feet = self._body_length*meters_to_feet
         wing_span_feet = self._wing_span*meters_to_feet
 
-        wing_body_surface_square_feet     = 2.0*get_apply_surface(self._apply_wing_body, self._area_voronoi)*meters_to_feet*meters_to_feet
-        elevon_surface_square_feet        = 2.0*get_apply_surface(self._apply_elevon, self._area_voronoi)*meters_to_feet*meters_to_feet
-        body_flap_surface_square_feet     = 2.0*get_apply_surface(self._apply_body_flap, self._area_voronoi)*meters_to_feet*meters_to_feet
-        vertical_tail_surface_square_feet = 2.0*get_apply_surface(self._apply_vertical_tail, self._area_voronoi)*meters_to_feet*meters_to_feet
+        wing_body_elevon_surface_square_feet = 2.0*get_apply_surface(self._apply_wing_body_elevon, self._area_voronoi)*meters_to_feet*meters_to_feet
+        body_flap_surface_square_feet        = 2.0*get_apply_surface(self._apply_body_flap, self._area_voronoi)*meters_to_feet*meters_to_feet
+        vertical_tail_surface_square_feet    = 2.0*get_apply_surface(self._apply_vertical_tail, self._area_voronoi)*meters_to_feet*meters_to_feet
+
+
+        lox_density = 1141 # kg/m3
+        kero_density = 810 # kg/m3
 
         N_engines = 1
-        rocket_expansion_ratio = 0.0 #TODO
+        rocket_expansion_ratio = 77.5 #TODO: CHECK
 
-        rho_tank = 0.0 #TODO
-        V_fuel = 0.0             *2.0 #TODO
-        insulation = 0.0 #TODO
-        S_tank = 0.0             *2.0 #TODO
-
+        # Space Shuttle External Tank
+        # Length: 153.8 ft (46.9 m)
+        # Diameter: 27.6 ft (8.4 m)
+        # Empty Weight: 58,500 lb (26,500 kg)
+        # Gross Liftoff Weight: 1,680,000 lb (760,000 kg)
+        sts_tank_radius = 4.2 # m
+        sts_tank_height = 46.9 # m
+        sts_tank_area = 2.0*np.pi*sts_tank_radius*sts_tank_height + 2.0*np.pi*sts_tank_radius**2.0 # m2 # Assume: Right Cylinder
+        sts_tank_empty_mass = 26500.0 # kg
+        tank_mass_per_area = sts_tank_empty_mass/sts_tank_area # kg/m2
 
         # Landing Gear Weight
 
@@ -358,7 +391,7 @@ class Load(object):
 
         # Hydraulic Weight
 
-        weight_hydraulic = 2.64 * ( ( (wing_body_surface_square_feet + elevon_surface_square_feet + body_flap_surface_square_feet + vertical_tail_surface_square_feet)*self._pdyn_inf/1000.0)**0.334 * (body_length_feet + wing_span_feet)**0.5 )
+        weight_hydraulic = 2.64 * ( ( (wing_body_elevon_surface_square_feet + body_flap_surface_square_feet + vertical_tail_surface_square_feet)*self._pdyn_inf/1000.0)**0.334 * (body_length_feet + wing_span_feet)**0.5 )
         self._half_mass_hydraulic = weight_hydraulic*0.5*pounds_to_kg
 
         # Avionics Weight
@@ -373,18 +406,26 @@ class Load(object):
 
         # Equipment Weight
 
-        weight_equip = 5000.0 + 0.01*weight_pounds_current_step ############## Maybe reduce fixed value
+        weight_equip = 1000.0 + 0.01*weight_pounds_current_step ############## Maybe reduce fixed value
         self._half_mass_equip = weight_equip*0.5*pounds_to_kg
 
         # Tank LOX Weight
 
-        weight_tank_lox = rho_tank*V_fuel + insulation*S_tank
-        self._half_mass_lox = weight_tank_lox*0.5*pounds_to_kg          # fuel_percentage #TODO
+        volume_lox = 2.0*self._half_mass_fuel_lox/lox_density # m3
+        lox_tank_radius = 1.65 # m
+        lox_tank_height = volume_lox/np.pi/lox_tank_radius/lox_tank_radius
+        lox_tank_area = 2.0*np.pi*lox_tank_radius*lox_tank_height + 2.0*np.pi*lox_tank_radius**2.0 # m2 # Assume: Right Cylinder
+
+        self._half_mass_tank_lox = 0.5*tank_mass_per_area*lox_tank_area # kg
 
         # Tank KERO Weight
 
-        weight_tank_kero = rho_tank*V_fuel + insulation*S_tank
-        self._half_mass_kero = weight_tank_kero*0.5*pounds_to_kg        # fuel_percentage #TODO
+        volume_kero = 2.0*self._half_mass_fuel_kero/kero_density # m3
+        kero_tank_radius = 1.65 # m
+        kero_tank_height = volume_kero/np.pi/kero_tank_radius/kero_tank_radius
+        kero_tank_area = 2.0*np.pi*kero_tank_radius*kero_tank_height + 2.0*np.pi*kero_tank_radius**2.0 # m2 # Assume: Right Cylinder
+
+        self._half_mass_tank_kero = 0.5*tank_mass_per_area*kero_tank_area # kg
 
         # Engine Weight
 
@@ -489,23 +530,20 @@ class Load(object):
                         tag_longerons_payload.append(self._descriptions[desc])
 
         tag_avionics_frames = []
-        tag_lox_frames = []
-        tag_kero_frames = []
         tag_engine_frames = []
         tag_payload_frames = []
+
+        tag_lox_front_frames = []
+        tag_kero_front_frames = []
+        tag_lox_rear_frames = []
+        tag_kero_rear_frames = []
+
         for i in range(self._nLongeron-1):
+
             for j in self._avionics_frames:
                 for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
                     if desc in self._descriptions.keys():
                         tag_avionics_frames.append(self._descriptions[desc])
-            for j in self._lox_frames:
-                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
-                    if desc in self._descriptions.keys():
-                        tag_lox_frames.append(self._descriptions[desc])
-            for j in self._kero_frames:
-                for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
-                    if desc in self._descriptions.keys():
-                        tag_kero_frames.append(self._descriptions[desc])
             for j in self._engine_frames:
                 for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
                     if desc in self._descriptions.keys():
@@ -515,54 +553,103 @@ class Load(object):
                     if desc in self._descriptions.keys():
                         tag_payload_frames.append(self._descriptions[desc])
 
-        tag_wing_body = []
+            j = self._lox_frames[0]
+            for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                if desc in self._descriptions.keys():
+                    tag_lox_front_frames.append(self._descriptions[desc])
+            j = self._lox_frames[1]
+            for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                if desc in self._descriptions.keys():
+                    tag_lox_rear_frames.append(self._descriptions[desc])
+            j = self._kero_frames[0]
+            for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                if desc in self._descriptions.keys():
+                    tag_kero_front_frames.append(self._descriptions[desc])
+            j = self._kero_frames[1]
+            for desc in ['MFRAME:%02d:2:%02d' % (j,i), 'MFRAME:%02d:3:%02d' % (j,i), 'MFRAME:%02d:4:%02d' % (j,i)]:
+                if desc in self._descriptions.keys():
+                    tag_kero_rear_frames.append(self._descriptions[desc])
+
+        tag_wing_body_elevon = []
         SKIN_FUSE_L = ['FUSE:BOT','FUSE_F']
         SKIN_WING_L = ['LWING:LOW','LWING_T::1']
         SKINS_L = SKIN_FUSE_L + SKIN_WING_L 
         for desc in self._descriptions.keys():
             for val in SKINS_L:
                 if val in desc:
-                    tag_wing_body.append(self._descriptions[desc])
+                    tag_wing_body_elevon.append(self._descriptions[desc])
 
         tag_body_flap = []
         for desc in self._descriptions.keys():
-            for val in ['FLAP:LOW']:
+            for val in ['FLAP:UPP']:
                 if val in desc:
                     tag_body_flap.append(self._descriptions[desc])
 
+        tag_vertical_tail = []
+        for desc in self._descriptions.keys():
+            for val in ['CTAIL:LOW','CTAIL_T::1']:
+                if val in desc:
+                    tag_vertical_tail.append(self._descriptions[desc])
+
+        tag_hydraulic = []
+        for desc in self._descriptions.keys():
+            for val in ['MSPARW:02','MRIBF:00','MSPARV:01']:
+                if val in desc:
+                    tag_hydraulic.append(self._descriptions[desc])
+
+        tag_gear = []
+        for desc in self._descriptions.keys():
+            for val in ['MSTRINGW:03:A:L:02','MSTRINGW:03:A:L:03',
+                        'MSTRINGW:03:B:L:02','MSTRINGW:03:B:L:03',
+                        'MSTRINGW:04:A:L:02','MSTRINGW:04:A:L:03',
+                        'MSTRINGW:04:B:L:02','MSTRINGW:04:B:L:03',
+                        'MSTRINGW:05:A:L:02','MSTRINGW:05:A:L:03',
+                        'MSTRINGW:05:B:L:02','MSTRINGW:05:B:L:03',
+                        'MFRAME:02:4:01','MFRAME:01:4:01']:
+                if val in desc:
+                    tag_gear.append(self._descriptions[desc])
+
         # APPLY
 
-        self._apply_wing_body     = tag_to_apply(tag_wing_body, self._elem_bdf, self._elem_tag_bdf)
-        self._apply_elevon        = [0] #TODO
-        self._apply_body_flap     = tag_to_apply(tag_body_flap, self._elem_bdf, self._elem_tag_bdf)
-        self._apply_vertical_tail = [0] #TODO
+        self._apply_wing_body_elevon = tag_to_apply(tag_wing_body_elevon, self._elem_bdf, self._elem_tag_bdf)
+        self._apply_body_flap        = tag_to_apply(tag_body_flap    , self._elem_bdf, self._elem_tag_bdf)
+        self._apply_vertical_tail    = tag_to_apply(tag_vertical_tail, self._elem_bdf, self._elem_tag_bdf)
 
 
-        self._apply_tps       = join(join(self._apply_wing_body, self._apply_elevon), self._apply_body_flap)
-        self._apply_equip     = self._apply_wing_body
+        self._apply_tps        = join(self._apply_wing_body_elevon, self._apply_body_flap)
+        self._apply_equip      = self._apply_wing_body_elevon
 
         apply_longerons         = tag_to_apply(tag_longerons        , self._elem_bdf, self._elem_tag_bdf)
         apply_longerons_payload = tag_to_apply(tag_longerons_payload, self._elem_bdf, self._elem_tag_bdf)
 
-        apply_avionics_frames = tag_to_apply(tag_avionics_frames, self._elem_bdf, self._elem_tag_bdf)
+        apply_avionics_frames   = tag_to_apply(tag_avionics_frames, self._elem_bdf, self._elem_tag_bdf)
 
-        apply_lox_frames      = tag_to_apply(tag_lox_frames     , self._elem_bdf, self._elem_tag_bdf)
-        apply_kero_frames     = tag_to_apply(tag_kero_frames    , self._elem_bdf, self._elem_tag_bdf)
-        apply_engine_frames   = tag_to_apply(tag_engine_frames  , self._elem_bdf, self._elem_tag_bdf)
+        apply_lox_front_frames  = tag_to_apply(tag_lox_front_frames    , self._elem_bdf, self._elem_tag_bdf)
+        apply_lox_rear_frames   = tag_to_apply(tag_lox_rear_frames     , self._elem_bdf, self._elem_tag_bdf)
+        apply_kero_front_frames = tag_to_apply(tag_kero_front_frames   , self._elem_bdf, self._elem_tag_bdf)
+        apply_kero_rear_frames  = tag_to_apply(tag_kero_rear_frames    , self._elem_bdf, self._elem_tag_bdf)
 
-        apply_payload_frames  = tag_to_apply(tag_payload_frames , self._elem_bdf, self._elem_tag_bdf)
+        apply_engine_frames    = tag_to_apply(tag_engine_frames  , self._elem_bdf, self._elem_tag_bdf)
+
+        apply_payload_frames   = tag_to_apply(tag_payload_frames , self._elem_bdf, self._elem_tag_bdf)
 
 
-        self._apply_gear      = [0] #TODO
-        self._apply_hydraulic = [0] #TODO
-        self._apply_avionics  = intersection(apply_avionics_frames, apply_longerons)
-        self._apply_elec      = self._apply_avionics
+        self._apply_gear       = tag_to_apply(tag_gear, self._elem_bdf, self._elem_tag_bdf)
+        self._apply_hydraulic  = tag_to_apply(tag_hydraulic, self._elem_bdf, self._elem_tag_bdf)
+        self._apply_avionics   = intersection(apply_avionics_frames, apply_longerons)
+        self._apply_elec       = self._apply_avionics
 
-        self._apply_lox       = intersection(apply_lox_frames     , apply_longerons)
-        self._apply_kero      = intersection(apply_kero_frames    , apply_longerons)
-        self._apply_engine    = intersection(apply_engine_frames  , apply_longerons)
+        self._apply_lox_front  = intersection(apply_lox_front_frames     , apply_longerons)
+        self._apply_lox_rear   = intersection(apply_lox_rear_frames     , apply_longerons)
+        self._apply_lox        = join(self._apply_lox_front, self._apply_lox_rear)
 
-        self._apply_payload   = intersection(apply_payload_frames , apply_longerons_payload)
+        self._apply_kero_front = intersection(apply_kero_front_frames    , apply_longerons)
+        self._apply_kero_rear  = intersection(apply_kero_rear_frames    , apply_longerons)
+        self._apply_kero       = join(self._apply_kero_front, self._apply_kero_rear)
+
+        self._apply_engine     = intersection(apply_engine_frames  , apply_longerons)
+
+        self._apply_payload    = intersection(apply_payload_frames , apply_longerons_payload)
 
 
 def isInt(s):
