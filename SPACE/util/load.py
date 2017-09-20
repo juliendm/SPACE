@@ -13,7 +13,7 @@ import numpy as np
 
 class Load(object):
 
-    def __init__(self, config, loadFactor, gravity_vector, half_thrust, half_thrust_vector, pdyn_inf, thrust_balance = 0.5, fuel_percentage = 1.0, 
+    def __init__(self, config, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle = 0.0, fuel_percentage = 1.0, 
         safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
         self._nDim = 3
@@ -29,15 +29,14 @@ class Load(object):
         self._engine_frames   = [10,11,16]
         self._payload_frames  = [3,4,5,6,7]
 
-        self._half_thrust_vector = half_thrust_vector
-        self._thrust_balance = thrust_balance
-
         self._config = copy.deepcopy(config)
 
         self._loadFactor = loadFactor
         self._gravity_vector = gravity_vector
 
         self._half_thrust_newtons = half_thrust
+        self._thrust_angle = thrust_angle # 0 degrees for axial thrust
+
         self._pdyn_inf = pdyn_inf
         self._fuel_percentage = fuel_percentage
 
@@ -100,6 +99,10 @@ class Load(object):
 
         self.__compte_load_noninertial()
 
+        # Structural Mass
+
+        self._structural_mass_bdf = [0.0 for iPoint_bdf in range(len(self._coord_bdf))]
+
         # sum_x = 0.0
         # sum_y = 0.0
         # sum_z = 0.0
@@ -160,6 +163,9 @@ class Load(object):
 
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
+                # Structural Mass
+                self._load_bdf[iPoint_bdf][iDim] += self._structural_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
+                # Additional Mass
                 self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
 
         # Write load
@@ -172,31 +178,35 @@ class Load(object):
 
     def postprocess(self, x_dvs, corresp):
 
+        # Structural Mass
+
+        self.__update_structural_mass(x_dvs, corresp)
+
         # Mass and Center Of Mass
 
         self._center_of_mass = [0.0 for iDim in range(self._nDim)]
 
-        self._structure_mass = 0.0
+        self._half_structure_mass = 0.0
         for iElem_bdf in range(self._nElem_bdf):
             elem_thickess = x_dvs[corresp[self._elem_tag_bdf[iElem_bdf]-1]-1]
             elem_mass = self._area_elem[iElem_bdf]*elem_thickess*self._material_rho
-            self._structure_mass += elem_mass
+            self._half_structure_mass += elem_mass
             for iDim in range(self._nDim):
                 self._center_of_mass[iDim] += elem_mass*self._center_elem[iElem_bdf][iDim]
 
-        self._additional_mass = 0.0
+        self._half_additional_mass = 0.0
         for iPoint_bdf in range(self._nPoint_bdf):
             point_mass = self._additional_mass_bdf[iPoint_bdf]
-            self._additional_mass += point_mass
+            self._half_additional_mass += point_mass
             for iDim in range(self._nDim):
                 self._center_of_mass[iDim] += point_mass*self._coord_bdf[iPoint_bdf][iDim]
 
         for iDim in range(self._nDim):
-            self._center_of_mass[iDim] /= (self._structure_mass+self._additional_mass)
+            self._center_of_mass[iDim] /= (self._half_structure_mass+self._half_additional_mass)
 
         # Forces
 
-        inertial_forces = self._structure_mass*self._gravity_vector*self._loadFactor*self._safetyFactor_inertial
+        inertial_forces = (self._half_structure_mass+self._half_additional_mass)*self._gravity_vector*self._loadFactor*self._safetyFactor_inertial
 
         non_inertial_forces = [0.0 for iDim in range(self._nDim)] 
         for iPoint_bdf in range(self._nPoint_bdf):
@@ -205,17 +215,21 @@ class Load(object):
 
         # Moments (Inertial Forces included in non_inertial_forces (additional_mass) would cancel out with the structural_mass Inertial Forces)
 
-        pitch_moment = 0.0
+        self._pitch_moment = 0.0
         dist = [0.0 for iDim in range(self._nDim)]
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
                 dist[iDim] = self._coord_bdf[iPoint_bdf][iDim]-self._center_of_mass[iDim]
-            pitch_moment += (self._load_noninertial_bdf[iPoint_bdf][1]*dist[0]-self._load_noninertial_bdf[iPoint_bdf][0]*dist[1])
+            self._pitch_moment += (self._load_noninertial_bdf[iPoint_bdf][1]*dist[0]-self._load_noninertial_bdf[iPoint_bdf][0]*dist[1])
 
+        # Center Of Pressure
 
-        # Distance Center Of Gravity - Center Of Pressure
-
-        self._dist_cog_cop = pitch_moment/np.sqrt(non_inertial_forces[0]*non_inertial_forces[0]+non_inertial_forces[1]*non_inertial_forces[1]+non_inertial_forces[2]*non_inertial_forces[2])
+        self._center_of_pressure = [0.0 for iDim in range(self._nDim)]
+        for iPoint_bdf in range(self._nPoint_bdf):
+            self._center_of_pressure[0] += self._load_noninertial_bdf[iPoint_bdf][1]*self._coord_bdf[iPoint_bdf][0]
+            self._center_of_pressure[1] += self._load_noninertial_bdf[iPoint_bdf][0]*self._coord_bdf[iPoint_bdf][1]
+        self._center_of_pressure[0] /= non_inertial_forces[1]
+        self._center_of_pressure[1] /= non_inertial_forces[0]
 
         # pitch_moment_elem = 0.0
         # for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
@@ -237,24 +251,46 @@ class Load(object):
 
         # Options 2 and 3 give the same pitch for 2 different cog but same forces distribution ...
 
-
-
         postpro_file = 'postpro.dat'
         postpro = open(postpro_file,'w')
 
-        postpro.write('Structural Mass: %f\n' % self._structure_mass)
-        postpro.write('Additional Mass: %f\n' % self._additional_mass)
-        postpro.write('Mass: %f\n' % (self._structure_mass+self._additional_mass))
-        postpro.write('Center of Mass: %f,%f,%f\n' % (self._center_of_mass[0],self._center_of_mass[1],self._center_of_mass[2]))
-        postpro.write('Distance Center Of Gravity - Center Of Pressure: %f\n' % self._dist_cog_cop)
-        #postpro.write('Pitch Moment due to Gravity (Expected Zero): %f\n' % pitch_moment_elem)
+        postpro.write('Half Structural Mass: %f\n' % self._half_structure_mass)
+        postpro.write('Half Additional Mass: %f\n' % self._half_additional_mass)
+        postpro.write('Half Mass           : %f\n' % (self._half_structure_mass+self._half_additional_mass))
+        postpro.write('\n')
+
+        postpro.write('Center of Mass    : %f,%f\n' % (self._center_of_mass[0],self._center_of_mass[1]))
+        postpro.write('Center of Pressure: %f,%f\n' % (self._center_of_pressure[0],self._center_of_pressure[1]))
+        postpro.write('Distance CoG-CoP x: %f\n'    % (np.sqrt((self._center_of_mass[0]-self._center_of_pressure[0])**2.0)))
+        postpro.write('Distance CoG-CoP y: %f\n'    % (np.sqrt((self._center_of_mass[1]-self._center_of_pressure[1])**2.0)))
+        postpro.write('\n')
 
         forces_in_non_inertial_frame = non_inertial_forces+inertial_forces
-        postpro.write('Non Inertial + Inertial Forces (Expected Zero): %f,%f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1],forces_in_non_inertial_frame[2]))
+        postpro.write('Sum Forces  (Expected Zero): %f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1]))
+        postpro.write('Sum Moments (Expected Zero): %f\n'    % self._pitch_moment)
+        postpro.write('\n')
 
         postpro.close()
 
     #: def postprocess()
+
+    def __update_structural_mass(self, x_dvs, corresp):
+
+        point_thickess = [0.0 for iPoint_bdf in range(len(self._coord_bdf))]
+        point_thickess_count = [0 for iPoint_bdf in range(len(self._coord_bdf))]
+
+        for iElem_bdf in range(self._nElem_bdf):
+            for iNode in range(self._nNode):
+                iPoint_bdf = self._elem_bdf[iElem_bdf][iNode]-1
+                point_thickess[iPoint_bdf] += x_dvs[corresp[self._elem_tag_bdf[iElem_bdf]-1]-1]
+                point_thickess_count[iPoint_bdf] += 1
+
+        for iPoint_bdf in range(len(self._coord_bdf)):
+            point_thickess[iPoint_bdf] /= point_thickess_count[iPoint_bdf]
+
+        for iPoint_bdf in range(len(self._coord_bdf)):
+            point_mass = self._area_voronoi[iPoint_bdf]*point_thickess[iPoint_bdf]*self._material_rho
+            self._structural_mass_bdf[iPoint_bdf] = point_mass
 
     def __update_additional_mass(self, half_mass_kg_current_step):
 
@@ -459,14 +495,28 @@ class Load(object):
 
             # THRUST
 
-            for iDim in range(self._nDim):
+            # Truss Problem
 
-                if iPoint_bdf in self._apply_thrust:
-                    index_thrust = self._apply_thrust.index(iPoint_bdf)
-                    if index_thrust == 0:
-                        self._load_noninertial_bdf[iPoint_bdf][iDim] += self._thrust_balance*self._half_thrust_vector[iDim] * self._safetyFactor_thrust
-                    elif index_thrust == 1:
-                        self._load_noninertial_bdf[iPoint_bdf][iDim] += (1.0-self._thrust_balance)*self._half_thrust_vector[iDim] * self._safetyFactor_thrust
+            # joints are assumed to act like hinges, permitting free rotation of the bars around the joint
+            # furthermore assumed that the truss structure is only loaded by concentrated forces acting at the joints
+            # as a consequence of the assumption of hinges the bar elements can only support an axial force
+
+            # Same signe conventions as for Elevons and Body Flap
+            force_x = -self._half_thrust_newtons*self._safetyFactor_thrust*np.cos(self._thrust_angle*np.pi/180.0)
+            force_y = self._half_thrust_newtons*self._safetyFactor_thrust*np.sin(self._thrust_angle*np.pi/180.0)
+
+            # Assume hinges are at 45 degrees
+            F0 = 0.5*(force_x-force_y)
+            F1 = 0.5*(force_x+force_y)
+
+            if iPoint_bdf in self._apply_thrust:
+                index_thrust = self._apply_thrust.index(iPoint_bdf)
+                if index_thrust == 0:
+                    self._load_noninertial_bdf[iPoint_bdf][0] += F0
+                    self._load_noninertial_bdf[iPoint_bdf][1] -= F0
+                elif index_thrust == 1:
+                    self._load_noninertial_bdf[iPoint_bdf][0] += F1
+                    self._load_noninertial_bdf[iPoint_bdf][1] += F1
 
 
     def __compute_apply_noninertial(self):

@@ -80,7 +80,7 @@ def load_models( filename         ,
 
     # Plot
 
-    surface = True
+    surface = False
 
     if surface:
 

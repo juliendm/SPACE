@@ -38,34 +38,56 @@ def structure(config):
     # local copy
     konfig = copy.deepcopy(config)
 
-    # Load
+    # Safety Factors
 
-    nx = float(konfig.ACCELERATION_X)
-    ny = float(konfig.ACCELERATION_Y)
-    nz = float(konfig.ACCELERATION_Z)
+    safetyFactor_thrust = 1.0 ##################################
+    safetyFactor_inertial = 1.0 #2.0 ##################################
+    safetyFactor_non_inertial = 1.0 #2.0 ##################################
 
-    safetyFactor_thrust = 2.5 # NOT WORKING BELOW THAT
-    safetyFactor_inertial = 2.0 ##################################
-    safetyFactor_non_inertial = 2.0 ##################################
+    # Fixed
+
+    fuel_percentage = 1.0
+    pdyn_inf = 12169.185366 # float(konfig.P_DYN_INF)
+
+    nx = 0.831404 # float(konfig.ACCELERATION_X)
+    ny = 0.0 # float(konfig.ACCELERATION_Y)
+    nz = -1.795355 # float(konfig.ACCELERATION_Z)
 
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
+    loadAngle = numpy.arccos(-nz/loadFactor)*180.0/numpy.pi # with [0,0,-1]
 
-    half_thrust_vector = numpy.array([-float(konfig.HALF_THRUST), 0.0, 0.0])
+    # Degree Of Freedom (Sum F and Sum M = 0)
+
+    thrust_angle = -15.0
+    half_thrust = 162844.38 # float(konfig.HALF_THRUST)
+    #loadAngle = 30.0 # 24.8482002334
+
+    # Update Values
+
+    nx = loadFactor*numpy.sin(loadAngle*numpy.pi/180.0)    
+    ny = 0.0
+    nz = -loadFactor*numpy.cos(loadAngle*numpy.pi/180.0)
+
+    gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/loadFactor # Change of Frame: to Structure Frame
+
+
+    # Initial Guess
+
+    ini_half_mass_guess = 20000 # kg
+
+
+    # Compute initial Load
 
     spaceutil.surf2sol(konfig)
     SPACE_INT(konfig)
-    load = spaceutil.Load(konfig, loadFactor, gravityVector, float(konfig.HALF_THRUST), half_thrust_vector,  float(konfig.P_DYN_INF), 0.5, 1.0, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
-    
-
-    load.update(30000)
-
+    load = spaceutil.Load(konfig, loadFactor, gravityVector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    load.update(ini_half_mass_guess)
 
     # Material properties
 
     material_rho = float(konfig.MATERIAL_DENSITY)
     material_E = float(konfig.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH) / 2.0 ##################################
+    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH) / 1.5 #2.0 ##################################
     material_nu = float(konfig.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
@@ -75,7 +97,10 @@ def structure(config):
 
     KSWeight = 80.0
     evalFuncs = ['mass','ks0','mf0']
-    SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
+
+    boost_factor = 10.0 ##################################
+
+    SPs = [StructProblem('lc0', loadFactor=loadFactor*boost_factor, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
     #SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
     numLoadCases = len(SPs)
 
@@ -116,23 +141,21 @@ def structure(config):
 
     #ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement)
 
-    # Load Factor
-
-    FEASolver.setOption('gravityVector',gravityVector.tolist())
-    for i in range(numLoadCases):
-        FEASolver.addInertialLoad(SPs[i])
+    # # Load Factor
+    # FEASolver.setOption('gravityVector',gravityVector.tolist())
+    # for i in range(numLoadCases):
+    #     FEASolver.addInertialLoad(SPs[i])
 
     history_filename = 'history_structure.dat'
     history_iteration = {'val':0}
 
-
-
-
+    # Process current state
 
     x_final = numpy.zeros(FEASolver.getNumDesignVars())
     FEASolver.structure.getDesignVars(x_final)
     load.postprocess(x_final, corresp)
 
+    # Objective
 
     def obj(x):
         '''Evaluate the objective and constraints'''
@@ -142,8 +165,8 @@ def structure(config):
 
             #############################################
             load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
-            load.update(load._structure_mass+load._additional_mass)
-            SPs[i].loadFile = konfig.LOAD_FILENAME   # Reset loadFile to read it again
+            load.update(load._half_structure_mass+load._half_additional_mass)
+            SPs[i].loadFile = konfig.LOAD_FILENAME # Reset loadFile to read it again
             #############################################
 
             FEASolver(SPs[i])
@@ -157,6 +180,8 @@ def structure(config):
             history_file.close()
             history_iteration['val'] += 1
         return funcs, False
+
+    # Sensitivies
 
     def sens(x, funcs):
         '''Evaluate the objective and constraint sensitivities'''
@@ -176,7 +201,6 @@ def structure(config):
     optProb.addObj(obj_name)
     history_file.write(',"%s"' % obj_name)
     FEASolver.addVariablesPyOpt(optProb)
-
     for i in range(numLoadCases):
         for j in xrange(1):
             con_name = '%s_ks%d'% (SPs[i].name, j)
@@ -185,10 +209,8 @@ def structure(config):
             con_name = '%s_mf%d'% (SPs[i].name, j)
             #optProb.addCon(con_name, lower=1.0, upper=1.0)
             history_file.write(',"%s"' % con_name)
-
     history_file.write('\n')
     history_file.close()
-
 
     if comm.rank == 0:
         print optProb
@@ -202,6 +224,9 @@ def structure(config):
         'Major iterations limit':3000,
         'Minor iterations limit':500,
         'Major step limit':2.0})
+
+    # Solve
+
     sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
 
     # Write Files
