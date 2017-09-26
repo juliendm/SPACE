@@ -44,22 +44,27 @@ def structure(config):
     safetyFactor_inertial = 1.0 #2.0 ##################################
     safetyFactor_non_inertial = 1.0 #2.0 ##################################
 
-    # Fixed
 
-    fuel_percentage = 1.0
+
+    # Fixed by Trajectory
+
+    fuel_percentage = 0.8
     pdyn_inf = 12169.185366 # float(konfig.P_DYN_INF)
-
     nx = 0.831404 # float(konfig.ACCELERATION_X)
     ny = 0.0 # float(konfig.ACCELERATION_Y)
     nz = -1.795355 # float(konfig.ACCELERATION_Z)
+    half_thrust = 162844.38 # float(konfig.HALF_THRUST)
 
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    loadAngle = numpy.arccos(-nz/loadFactor)*180.0/numpy.pi # with [0,0,-1]
+    loadAngle = numpy.arccos(-nz/loadFactor)*180.0/numpy.pi # Angle with vector [0,0,-1]
 
-    # Degree Of Freedom (Sum F and Sum M = 0)
 
-    thrust_angle = -15.0
-    half_thrust = 162844.38 # float(konfig.HALF_THRUST)
+    # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
+    thrust_angle = -16.0
+
+
+    # Modify inputs
+    #loadFactor = ...
     #loadAngle = 30.0 # 24.8482002334
 
     # Update Values
@@ -87,7 +92,7 @@ def structure(config):
 
     material_rho = float(konfig.MATERIAL_DENSITY)
     material_E = float(konfig.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH) / 1.5 #2.0 ##################################
+    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH) / 1.6 #1.5 #2.0 ##################################
     material_nu = float(konfig.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
@@ -98,7 +103,7 @@ def structure(config):
     KSWeight = 80.0
     evalFuncs = ['mass','ks0','mf0']
 
-    boost_factor = 10.0 ##################################
+    boost_factor = 12.0 ##################################
 
     SPs = [StructProblem('lc0', loadFactor=loadFactor*boost_factor, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
     #SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
@@ -140,6 +145,9 @@ def structure(config):
     mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
 
     #ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement)
+
+
+    # # # NO LOAD FACTOR VIA TACS ANYMORE, LOAD FACTOR ON STRUCTURE IS DONE VIA LOAD FILE # # #
 
     # # Load Factor
     # FEASolver.setOption('gravityVector',gravityVector.tolist())

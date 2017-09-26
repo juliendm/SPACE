@@ -62,7 +62,9 @@ def parallel_computation( filename           ,
 
     desvar = DesignVariables()
 
-    if False:
+    case = 3
+
+    if case == 1:
 
         nd = 10*desvar.ndim
 
@@ -70,26 +72,22 @@ def parallel_computation( filename           ,
 
         np.savetxt(os.path.join(project_folder,'dvs_new.dat'), X, fmt='%.18e', delimiter=', ', newline='\n', header='', footer='', comments='# ')
 
-    else:
+    elif case == 2:
 
         X = np.loadtxt(os.path.join(project_folder,'dvs.dat'), delimiter=', ', comments='# ')
-        #X = np.loadtxt('dvs.dat', delimiter=', ', comments='# ')
-
-        # X = np.loadtxt(os.path.join('RESPONSE_SURFACE_DV_SUB/dvs.dat'), delimiter=', ', comments='# ')
-        # filtered_X = []
-        # for index in [8,17,22,24,27,28,29,31,38,40,41,43,45,47,48,53,56,72,74,78,87,88,92,95,97,106,107,109]:
-        #   vec = X[index-1]
-        #   filtered_X.append([vec[0],vec[1],vec[2],vec[4],vec[3],vec[5],vec[6],vec[7],vec[8],vec[9],vec[10]])
-        # np.savetxt(os.path.join(project_folder,'dvs_missing.dat'), filtered_X, fmt='%.18e', delimiter=', ', newline='\n', header='', footer='', comments='# ')
-
 
         for index in range(len(X)):
 
             dvs = X[index]
             desvar.unpack(konfig, dvs)
             
-            proc = project.func('AERODYNAMICS', konfig)
+            proc = project.func('STRUCTURE', konfig)
             proc.wait()
+
+    elif case == 3:
+
+        proc = project.func('STRUCTURE', konfig)
+        proc.wait()
 
 
     for proc in procs:
