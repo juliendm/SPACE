@@ -10,6 +10,9 @@ sys.path.append(os.environ['SPACE_RUN'])
 import SPACE
 from SPACE.surfpack import Surfpack
 
+import matplotlib
+matplotlib.use('Agg')
+
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 import matplotlib.pyplot as plt
@@ -19,7 +22,7 @@ from SPACE.util import DesignVariables
 from SPACE.eval import model as spacemodel
 
 # -------------------------------------------------------------------
-#  Main 
+#  Main
 # -------------------------------------------------------------------
 
 def main():
@@ -45,6 +48,8 @@ def load_models( filename         ,
                  project_folder   ,
                  regime = 'SUP' ):
 
+# rice
+
     # Project
 
     if os.path.exists(project_folder):
@@ -56,35 +61,22 @@ def load_models( filename         ,
         state  = SPACE.io.State()
         project = SPACE.project.Project(config, state, folder=project_folder)
 
-    
+
     # Start new model
 
     konfig = copy.deepcopy(config)
-    
+
     aero = spacemodel.AeroModel(konfig,project_folder)
 
-    # print aero.static_margin([8.000000e+00,   1.000000e+00,  -1.000000e+00,   2.059314e-01,   5.000000e-01,   5.000000e-01,  -5.000000e-01,   5.000000e-01,  -2.000000e-01,  -5.000000e-01,  -2.000000e-01],11.0)
-    # print aero.moment_y([5.710816e+00,   1.000000e+00,  -1.000000e+00,  -2.500000e-01,  -3.500000e-01,  -5.000000e-01,  -5.000000e-01,  -5.000000e-01,  -2.000000e-01,  -5.000000e-01,  -2.000000e-01],11.0)
-    # print aero.moment_y([3.665795e+00,   1.000000e+00,  -1.000000e+00,   5.000000e-01,   5.000000e-01,  -5.000000e-01,  -5.000000e-01,   5.000000e-01,  -2.000000e-01,  -5.000000e-01,  -2.000000e-01],11.0)
-
-    # print aero.max_trimmed_efficiency([0.5,0.0,0.0,  0.0,0.0,  -0.5,0.5,0.5,0.5,  0.5,0.5],10.0)
-
-    # print aero.moment_y([5.623184e+00,   1.000000e+00,   1.000000e+00,   9.860460e-02,  -2.500000e-01,   5.000000e-01,  -5.000000e-01,   5.000000e-01,   5.000000e-01,   5.000000e-01,  -2.000000e-01], 11.0)
-    
-    # dvs = [2.377544e+00,  -5.045048e-01,   8.128633e-01,   2.803823e-01 ,  3.110862e-01,  -4.362524e-01 ,  1.069665e-01 , -1.411665e-01 , -7.990462e-02 ,  3.137270e-01,   1.857822e-01]
-    # print aero.drag(dvs) #   3.007715e-01
-    # print aero.lift(dvs) #   3.007715e-01
-    # print aero.moment_y(dvs,11.0) #   3.007715e-01
-
-
+    mission_data = np.loadtxt('output_spaceplane.dat',skiprows=1)
 
     # Plot
 
-    surface = False
+    surface = True
 
     if surface:
 
-        flag = 'TRIM'
+        flag = 'DRAG'
 
         nx = 100
 
@@ -126,7 +118,7 @@ def load_models( filename         ,
                             elif (flag == 'TRIM'):
 
                                 COEFF[ix,iy] = aero.trim(dvs,cog_x,cog_z)[aero.desvar.el_index]*180.0/np.pi
-                            
+
                             elif (flag == 'STATIC_MARGIN'):
 
                                 trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
@@ -142,7 +134,7 @@ def load_models( filename         ,
                                 COEFF[ix,iy] = aero.k_alpha(trimmed_dvs,cog_x,cog_z)
                                 #else:
                                 #    COEFF[ix,iy] = -float("inf") #float('nan')
-                            
+
                             elif (flag == 'EFFICIENCY'):
 
                                 COEFF[ix,iy] = aero.max_trimmed_efficiency(dvs,cog_x,cog_z)
@@ -189,7 +181,38 @@ def load_models( filename         ,
             plt.fill_between([1,8], [15,55], [55,55], color='grey', alpha='0.5', zorder=3)
             plt.fill_between([1,8], [0,0], [0,15], color='grey', alpha='0.5', zorder=3)
 
+
+            mission_mach = mission_data[:,26]
+            mission_aoa = mission_data[:,9]
+
+            plt.plot(mission_mach, mission_aoa, color='red')
+
             fig.savefig(os.path.join(project_folder,'fig_' + str(cog_x) + '.png'))
+            plt.close(fig)
+
+
+
+
+
+            # Reynolds = 10.0**(-3.0/8.0*dv_mach+7.0+dv_rey) #
+
+            fig = plt.figure()
+
+            fill_mach = np.linspace(0,8,100)
+
+            fill_reynolds = 10.0**(-3.0/8.0*fill_mach+7.0+1.0)
+            plt.fill_between(fill_mach, fill_reynolds, np.max(fill_reynolds)*np.ones(len(fill_reynolds)), color='grey', alpha='0.5', zorder=3)
+
+            fill_reynolds = 10.0**(-3.0/8.0*fill_mach+7.0-1.0)
+            plt.fill_between(fill_mach, np.min(fill_reynolds)*np.ones(len(fill_reynolds)), fill_reynolds, color='grey', alpha='0.5', zorder=3)
+
+
+            mission_mach = mission_data[:,26]
+            mission_reynolds = mission_data[:,27]
+
+            plt.semilogy(mission_mach, mission_reynolds, color='red')
+
+            fig.savefig(os.path.join(project_folder,'fig_reynolds.png'))
             plt.close(fig)
 
 
@@ -295,7 +318,7 @@ def load_models( filename         ,
     # plt.ylabel('AoA', fontsize=18)
 
     # fig.savefig(os.path.join(project_folder,'fig_2.png'))
-    
+
     # # plt.draw()
     # # plt.show()
 
