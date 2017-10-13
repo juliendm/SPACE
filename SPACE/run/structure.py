@@ -33,8 +33,6 @@ from SPACE.run.interface import INT       as SPACE_INT
 
 def structure(config):
 
-    gcomm = comm = MPI.COMM_WORLD
-
     # local copy
     konfig = copy.deepcopy(config)
 
@@ -87,6 +85,329 @@ def structure(config):
     SPACE_INT(konfig)
     load = spaceutil.Load(konfig, loadFactor, gravityVector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
     load.update(ini_half_mass_guess)
+
+
+
+
+
+
+    computeNastran(config)
+
+    #computeTacs(config)
+
+    # # get history and objectives
+
+    # history      = spaceio.read_history( history_filename )
+    # outputs      = spaceutil.ordered_bunch()
+    # outputs.MASS = history[obj_name][-1]
+
+    # # info out
+
+    # info = spaceio.State()
+    # info.FUNCTIONS.update(outputs)
+
+    # return info
+
+    return 0
+
+#: def structure()
+
+
+
+
+def computeNastran(config):
+
+    # Read bdf
+    # --------
+
+    bdf = open(config.STRUCT + '.bdf')
+    coord_bdf = []
+    elem_bdf = []
+    elem_tag_bdf = []
+    descriptions = {}
+    for line in bdf:
+        data = line.split()
+        if (line[0]=="$" and len(data) == 3):
+            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
+        elif (line[0]=="G" and len(data) == 6):
+            vec = [float(data[3]), float(data[4].strip('*'))]
+        elif (line[0]=="*" and len(data) == 5):
+            vec.append(float(data[2]))
+            coord_bdf.append(vec)
+        elif (line[0]=="C" and len(data) == 7):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            elem_tag_bdf.append(int(data[2]))
+    bdf.close()
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    # Write bdf Nastran
+    # -----------------
+
+    bdf_nastran = open(config.STRUCT + '_nastran.bdf','w')
+    bdf = open(config.STRUCT + '.bdf')
+    for line in bdf:
+        if (line.strip() != 'END BULK'):
+            bdf_nastran.write(line)
+    bdf.close()
+
+    # Material Properties
+    write_line(bdf_nastran,'MAT1',r=8)
+    write_line(bdf_nastran,'1',r=8)
+    write_line(bdf_nastran,config.MATERIAL_YOUNG_MODULUS,r=16)
+    write_line(bdf_nastran,config.MATERIAL_POISSON_RATIO,r=8)
+    write_line(bdf_nastran,config.MATERIAL_DENSITY,r=16)
+    bdf_nastran.write('\n')
+
+    # Shell
+    for desc in descriptions.keys():
+        write_line(bdf_nastran,'PSHELL',r=8)
+        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'1',r=8)
+        #write_line(bdf_nastran,('%.6f' % x_dvs[descriptions[desc]-1])[1:],r=8)
+        write_line(bdf_nastran,('%.6f' % 0.0016),r=8)
+        write_line(bdf_nastran,'1',r=16)
+        write_line(bdf_nastran,'1',r=8)
+        bdf_nastran.write('\n')
+
+    # Loads
+    # -----
+
+    load = open(config.LOAD_FILENAME)
+    nPoint_bdf = int(load.readline().split()[0])
+    nDim = 3
+    load_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
+    for iPoint_bdf in range(nPoint_bdf):
+        data = load.readline().split()
+        load_bdf[iPoint_bdf][0] = float(data[3])
+        load_bdf[iPoint_bdf][1] = float(data[4])
+        load_bdf[iPoint_bdf][2] = float(data[5])
+    load.close()
+
+    write_line(bdf_nastran,'LOAD',r=8)
+    write_line(bdf_nastran,'1',r=8)
+    write_line(bdf_nastran,'1.0',r=8)
+    write_line(bdf_nastran,'1.0',r=8)
+    write_line(bdf_nastran,'2',r=8)
+    write_line(bdf_nastran,'1.0',r=8)
+    write_line(bdf_nastran,'3',r=8)
+    bdf_nastran.write('\n')
+
+    # Force
+    for iPoint_bdf in range(nPoint_bdf):
+        if (load_bdf[iPoint_bdf][0] != 0.0 and load_bdf[iPoint_bdf][1] != 0.0 and load_bdf[iPoint_bdf][2] != 0.0):
+            write_line(bdf_nastran,'FORCE*',r=8)
+            write_line(bdf_nastran,'2',r=16)
+            write_line(bdf_nastran,'%d' % (iPoint_bdf+1),r=16)
+            write_line(bdf_nastran,'0',r=16)
+            write_line(bdf_nastran,'1.0',r=16)
+            bdf_nastran.write('*F1\n')
+            write_line(bdf_nastran,'*F1',r=8)
+            write_line(bdf_nastran,'%.8E' % load_bdf[iPoint_bdf][0],r=16)
+            write_line(bdf_nastran,'%.8E' % load_bdf[iPoint_bdf][1],r=16)
+            write_line(bdf_nastran,'%.8E' % load_bdf[iPoint_bdf][2],r=16)
+            bdf_nastran.write('\n')
+
+    # Acceleration
+    nx = float(config.ACCELERATION_X)
+    ny = float(config.ACCELERATION_Y)
+    nz = float(config.ACCELERATION_Z)
+    loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
+    gravityVector = -numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
+    write_line(bdf_nastran,'GRAV',r=8)
+    write_line(bdf_nastran,'3',r=8)
+    write_line(bdf_nastran,'0',r=8)
+    write_line(bdf_nastran,'9.81',r=8)
+    write_line(bdf_nastran,'%.3f' % gravityVector[0],r=8)
+    write_line(bdf_nastran,'%.3f' % gravityVector[1],r=8)
+    write_line(bdf_nastran,'%.3f' % gravityVector[2],r=8)
+    bdf_nastran.write('\n')
+
+    # Design Variables
+    # ----------------
+
+    thickness = 0.0016
+    min_thickness = 0.001
+    max_thickness = 3.0
+
+    for desc in descriptions.keys():
+        write_line(bdf_nastran,'DESVAR',r=8)
+        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'V_' + str(descriptions[desc]),r=8)
+        write_line(bdf_nastran,str(thickness),r=8)
+        write_line(bdf_nastran,str(min_thickness),r=8)
+        write_line(bdf_nastran,str(max_thickness),r=8)
+        write_line(bdf_nastran,'1.0',r=8)
+        bdf_nastran.write('\n')
+
+    for desc in descriptions.keys():
+        write_line(bdf_nastran,'DVPREL1',r=8)
+        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'PSHELL',r=8)
+        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'T',r=8)
+        # write_line(bdf_nastran,str(min_thickness),r=8)
+        # write_line(bdf_nastran,str(max_thickness),r=8)
+        # write_line(bdf_nastran,str(0.0),r=8)
+        bdf_nastran.write('\n')
+        write_line(bdf_nastran,'',r=8)
+        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,str(1.0),r=8)
+        bdf_nastran.write('\n')
+
+    # Objective
+    # ---------
+
+    dresp_id = 0
+
+    write_line(bdf_nastran,'DRESP1',r=8)
+    dresp_id += 1
+    write_line(bdf_nastran,str(dresp_id),r=8)
+    write_line(bdf_nastran,'W',r=8)
+    write_line(bdf_nastran,'WEIGHT',r=8)
+    bdf_nastran.write('\n')
+
+    # Constraints
+    # -----------
+
+    con_id = 0
+
+    con_id += 1
+    write_line(bdf_nastran,'DCONADD',r=8)
+    write_line(bdf_nastran,str(con_id),r=8)
+    write_line(bdf_nastran,str(con_id+1),r=8)
+    # write_line(bdf_nastran,str(con_id+2),r=8)
+    bdf_nastran.write('\n')
+
+    # Stresses
+    con_id += 1
+
+    var_stress = [9,17]
+    for var in var_stress:
+        write_line(bdf_nastran,'DRESP1',r=8)
+        dresp_id += 1
+        write_line(bdf_nastran,str(dresp_id),r=8)
+        if (var == 9):
+            write_line(bdf_nastran,'VMSTR1',r=8)
+        elif (var == 17):
+            write_line(bdf_nastran,'VMSTR2',r=8)
+        write_line(bdf_nastran,'STRESS',r=8)
+        write_line(bdf_nastran,'ELEM',r=16)
+        write_line(bdf_nastran,str(var),r=8)
+        write_line(bdf_nastran,'',r=8)
+        check = 7
+        for iElem_bdf in range(nElem_bdf):
+            if (check == 8):
+                check = 0
+                bdf_nastran.write('\n')
+                write_line(bdf_nastran,'',r=8)
+            check +=1
+            write_line(bdf_nastran,str(iElem_bdf+1),r=8)
+        if (check != 0):
+            bdf_nastran.write('\n')
+
+    write_line(bdf_nastran,'DRESP2',r=8)
+    dresp_id += 1
+    write_line(bdf_nastran,str(dresp_id),r=8)
+    write_line(bdf_nastran,'MAXVM',r=8)
+    write_line(bdf_nastran,str(con_id),r=8)
+    bdf_nastran.write('\n')
+    write_line(bdf_nastran,'',r=8)
+    write_line(bdf_nastran,'DRESP1',r=8)
+    for iDim in range(len(var_stress)):
+        write_line(bdf_nastran,str(dresp_id-len(var_stress)+iDim),r=8)
+    bdf_nastran.write('\n')
+
+    write_line(bdf_nastran,'DEQATN',r=8)
+    write_line(bdf_nastran,str(con_id),r=8)
+    bdf_nastran.write('MAXVM(VMSTR1,VMSTR2)=MAX(VMSTR1,VMSTR2)')
+    bdf_nastran.write('\n')
+
+    write_line(bdf_nastran,'DCONSTR',r=8)
+    write_line(bdf_nastran,str(con_id),r=8)
+    write_line(bdf_nastran,str(dresp_id),r=8)
+    write_line(bdf_nastran,'1e-09',r=8)
+    write_line(bdf_nastran,'1e7',r=8)
+#    write_line(bdf_nastran,config.MATERIAL_YIELD_STRENGTH,r=8)
+    bdf_nastran.write('\n')
+
+    # Optimization
+    # ------------
+
+    write_line(bdf_nastran,'DOPTPRM',r=8) 
+    write_line(bdf_nastran,'DESMAX',r=8)  
+    write_line(bdf_nastran,'500',r=8)    
+    write_line(bdf_nastran,'PENAL',r=8) 
+    write_line(bdf_nastran,'0.0',r=8)    
+    write_line(bdf_nastran,'CT',r=8) 
+    write_line(bdf_nastran,'-.03',r=8)  
+    write_line(bdf_nastran,'CTMIN',r=8)    
+    write_line(bdf_nastran,'.003',r=8)     
+    bdf_nastran.write('\n')
+    write_line(bdf_nastran,'',r=8) 
+    write_line(bdf_nastran,'CONV1',r=8)  
+    write_line(bdf_nastran,'1.-5',r=8)    
+    write_line(bdf_nastran,'CONV2',r=8) 
+    write_line(bdf_nastran,'1.-20',r=8)    
+    write_line(bdf_nastran,'CONVDV',r=8) 
+    write_line(bdf_nastran,'1.-6',r=8)  
+    write_line(bdf_nastran,'CONVPR',r=8)    
+    write_line(bdf_nastran,'1.-5',r=8)
+    bdf_nastran.write('\n')
+
+# Default
+
+# CONV1 0.001       Objective relative change 2 iterations
+# CONV2 1.0E-20     Objective absolute change 2 iterations
+# CONVDV 0.0001     Design variables
+# CONVPR 0.001      Properties
+# CT -0.03          Constraint tolerance (active if value greater than CT)
+# CTMIN 0.003                            (violated if value greater than CTMIN)
+
+# DELB 0.0001       Relative finite difference move parameter
+# DELP 0.2          Properties: Fractional change allowed
+# DELX 0.5          Design variables: Fractional change allowed
+
+# DESMAX 5
+
+# DPMAX 0.5
+# DPMIN 0.01        Properties: Minimum move limit
+
+# DXMAX 1.0
+# DXMIN 0.05        Design variables: Minimum move limit
+
+# PENAL 0.0         Improve perfo if starting design is infeasible when e.g. 2.0
+
+    bdf_nastran.write('ENDDATA\n')
+
+    bdf_nastran.close()
+
+#: def computeNastran()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def computeTacs(config):
+
+    gcomm = comm = MPI.COMM_WORLD
 
     # Material properties
 
@@ -241,20 +562,9 @@ def structure(config):
 
     write_files(config, FEASolver, SPs[0], corresp, load)
 
-    # get history and objectives
+#: def computeTacs()
 
-    history      = spaceio.read_history( history_filename )
-    outputs      = spaceutil.ordered_bunch()
-    outputs.MASS = history[obj_name][-1]
 
-    # info out
-
-    info = spaceio.State()
-    info.FUNCTIONS.update(outputs)
-
-    return info
-
-#: def structure()
 
 def addDVGroups(FEASolver):
 
@@ -388,7 +698,28 @@ def write_sol_1(sol_file,solution):
     sol.write('\nEnd\n')
     sol.close()
 
+def write_sol_3(sol_file,solution):
+ 
+    sol = open(sol_file,'w')
+    sol.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nSolAtVertices\n' + str(len(solution)) + '\n3 1 1 1\n')
+    for i_point in range(len(solution)):
+        sol.write(str(solution[i_point][0]) + " " + str(solution[i_point][1]) + " " + str(solution[i_point][2]) + "\n")
+    sol.write('\nEnd\n')
+    sol.close()
 
+#: def write_sol()
+
+
+def write_line(file,line,l=0,r=0):
+    if l is not 0:
+        n = l - len(line)
+        for i in range(n):
+            line = ' ' + line
+    if r is not 0:
+        n = r - len(line)
+        for i in range(n):
+            line = line + ' '
+    file.write(line)
 
 
 def isFloat(s):
