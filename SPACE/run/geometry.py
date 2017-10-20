@@ -44,6 +44,7 @@ def geometry ( config ):
 
     # FLUID
 
+    pgm.structure = False
     pgm.tail = False
     bse = pgm.initialize()
     pgm.comps['lwing'].set_airfoil('profile_1.dat')
@@ -62,6 +63,7 @@ def geometry ( config ):
     
     if konfig.STRUCT != 'NONE':
 
+        pgm.structure = True
         pgm.tail = True
         bse = pgm.initialize()
         pgm.comps['lwing'].set_airfoil('profile_1.dat')
@@ -85,7 +87,12 @@ class Spaceplane(PGMconfiguration):
 
     def _define_comps(this):
 
-        this.comps['fuse'] = PGMbody(num_x=14, num_y=4, num_z=8) #num_x is the number of surfacees
+        if this.structure:
+            this.fuse_num_x = 16
+        else:
+            this.fuse_num_x = 14
+
+        this.comps['fuse'] = PGMbody(num_x=this.fuse_num_x, num_y=4, num_z=8) #num_x is the number of surfacees
         this.comps['lwing'] = PGMwing(num_x=9, num_z=12, left_closed=True)
         this.comps['rwing'] = PGMwing(num_x=9, num_z=12, right_closed=True)
         if this.tail: this.comps['ctail'] = PGMwing(num_x=3, num_z=4, left_closed=True)
@@ -99,12 +106,15 @@ class Spaceplane(PGMconfiguration):
       #  this.comps['flap_t'] = PGMtip(this, 'flap', 'left', 0.1)
 
         #this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'bot', 'E', [0,1], 'lwing', 'right')
-        this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,1], 'lwing', 'right')
+        if this.structure:
+            this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,2], 'lwing', 'right')
+        else:
+            this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,1], 'lwing', 'right')
 
         #this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,2], 'rwing', 'left')
-        if this.tail: this.comps['ctail_fuse'] = PGMjunction(this, 'fuse', 'top', 'E', [3,9], 'ctail', 'right')
+        if this.tail: this.comps['ctail_fuse'] = PGMjunction(this, 'fuse', 'top', 'E', [3,this.fuse_num_x-5], 'ctail', 'right')
 
-        this.comps['flap_fuse'] = PGMjunction(this, 'fuse', 'bot', 'S', [12,0], 'flap', 'right')
+        this.comps['flap_fuse'] = PGMjunction(this, 'fuse', 'bot', 'S', [this.fuse_num_x-2,0], 'flap', 'right')
 
     def _define_params(this):
 
@@ -220,7 +230,8 @@ class Spaceplane(PGMconfiguration):
     def _set_bspline_options(this):
         comps = this.comps
 
-        comps['fuse'].faces['bot'].set_option('num_pt', 'v', [8,10,15,10,6,6,6,6,6,6,6,6,6,6], both=False)
+
+        comps['fuse'].faces['bot'].set_option('num_pt', 'v', [8,10,15,10]+[6]*(this.fuse_num_x-4), both=False)
 
         comps['fuse'].faces['bot'].set_option('num_pt', 'u', [5,5,5,5,5,5,5,5], both=False)
         comps['fuse'].faces['lft'].set_option('num_pt', 'u', [6,6,6,8], both=False)
@@ -238,8 +249,10 @@ class Spaceplane(PGMconfiguration):
 
         rear_spar = 2
 
-        idims = np.linspace(0.08,0.9,9) #13
-        jdims = np.append(np.linspace(0,this.wing_width_section_1/this.wing_width_section_2,3)[0:-1],np.linspace(this.wing_width_section_1/this.wing_width_section_2,1,4)) #13
+        idims = np.array([ 0.08  ,  0.1825,  0.285 ,  0.3875,  0.49  ,  0.5925,  0.695 ,0.7975,  0.9   ]) # np.linspace(0.08,0.9,9) #13
+        angle_location = 0.7 #this.wing_width_section_1/this.wing_width_section_2 + 0.05 #########
+        jdims = np.append(np.linspace(0,angle_location,3)[0:-1],np.linspace(angle_location,1,4)) #13
+
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]):
                 afm.addVertFlip('MRIBW:%02d:l:%02d' % (j,i),'lwing',[idims[i],jdims[j]],[idims[i+1],jdims[j]])
@@ -259,7 +272,7 @@ class Spaceplane(PGMconfiguration):
         #     afm.addVertFlip('MSPARW:%02d:l:%02d' % (idims.shape[0],j),'lwing',[idims_sec1[j],jdims[j]],[idims_sec1[j+1],jdims[j+1]])
         #     afm.addVertFlip('MSPARW:%02d:r:%02d' % (idims.shape[0],j),'rwing',[idims_sec1[j],1-jdims[j]],[idims_sec1[j+1],1-jdims[j+1]])
 
-        idims = idims[1:6]
+        idims = idims[2:9]
         for i in range(idims.shape[0]):
             if i is 0 or i is idims.shape[0]-1:
                 afm.addCtrVert('MSPARC:%02d' % (i),'lwing','rwing',idims[i])

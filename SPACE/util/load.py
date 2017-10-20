@@ -17,7 +17,7 @@ class Load(object):
         safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
         self._nDim = 3
-        self._nNode = 4
+        self._nNode = 3
 
         self._nFrame = 13
         self._nLongeron = 4
@@ -88,7 +88,7 @@ class Load(object):
 
         coord_array = np.array(self._coord)
         self._body_length = 18.0 # abs(max(coord_array[:,0])-min(coord_array[:,0])) # FIXED TO NOT INCLUDE VARIATION DUE TO BODYFLAP !!!!!!!!!!
-        self._wing_span = 2.0*max(abs(coord_array[:,2]))
+        self._wing_span = 2.0*max(abs(coord_array[:,1]))
 
         # Apply
 
@@ -163,24 +163,27 @@ class Load(object):
 
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
-                # Structural Mass
-                self._load_bdf[iPoint_bdf][iDim] += self._structural_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
+
+                # # DO NOT ADD THIS WHEN USING NASTRAN, IT WILL TAKE CARE OF THIS
+                # # Structural Mass
+                # self._load_bdf[iPoint_bdf][iDim] += self._structural_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
+
                 # Additional Mass
                 self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
 
-        # Write load
-        write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf)
+        # # Write load
+        # write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf)
 
         # # Write Check
-        # write_check(self._load_bdf,self._coord_bdf,self._elem_bdf)
+        # write_check(self._load_bdf,self._coord_bdf,self._elem_bdf,self._normal_voronoi)
 
     #: def load()
 
     def postprocess(self, x_dvs, corresp):
 
-        # Structural Mass
-
-        self.__update_structural_mass(x_dvs, corresp)
+        # # DO NOT ADD THIS WHEN USING NASTRAN, IT WILL TAKE CARE OF THIS
+        # # Structural Mass
+        # self.__update_structural_mass(x_dvs, corresp)
 
         # Mass and Center Of Mass
 
@@ -220,16 +223,16 @@ class Load(object):
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
                 dist[iDim] = self._coord_bdf[iPoint_bdf][iDim]-self._center_of_mass[iDim]
-            self._pitch_moment += (self._load_noninertial_bdf[iPoint_bdf][1]*dist[0]-self._load_noninertial_bdf[iPoint_bdf][0]*dist[1])
+            self._pitch_moment += (self._load_noninertial_bdf[iPoint_bdf][2]*dist[0]-self._load_noninertial_bdf[iPoint_bdf][0]*dist[2])
 
         # Center Of Pressure
 
         self._center_of_pressure = [0.0 for iDim in range(self._nDim)]
         for iPoint_bdf in range(self._nPoint_bdf):
-            self._center_of_pressure[0] += self._load_noninertial_bdf[iPoint_bdf][1]*self._coord_bdf[iPoint_bdf][0]
-            self._center_of_pressure[1] += self._load_noninertial_bdf[iPoint_bdf][0]*self._coord_bdf[iPoint_bdf][1]
-        self._center_of_pressure[0] /= non_inertial_forces[1]
-        self._center_of_pressure[1] /= non_inertial_forces[0]
+            self._center_of_pressure[0] += self._load_noninertial_bdf[iPoint_bdf][2]*self._coord_bdf[iPoint_bdf][0]
+            self._center_of_pressure[2] += self._load_noninertial_bdf[iPoint_bdf][0]*self._coord_bdf[iPoint_bdf][2]
+        self._center_of_pressure[0] /= non_inertial_forces[2]
+        self._center_of_pressure[2] /= non_inertial_forces[0]
 
         # pitch_moment_elem = 0.0
         # for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
@@ -238,7 +241,7 @@ class Load(object):
         #     local_force = elem_mass*self._gravityVector*self._loadFactor*self._safetyFactor_inertial
         #     for iDim in range(self._nDim):
         #         dist[iDim] = self._center_elem[iElem_bdf][iDim]-com[iDim]
-        #     pitch_moment_elem += (local_force[1]*dist[0]-local_force[0]*dist[1])
+        #     pitch_moment_elem += (local_force[2]*dist[0]-local_force[0]*dist[2])
 
         # Conclusion: its fine to compute the pitch with the cog of the structre only !!!!
         # The inertial forces included in the External loads (which should have normally have no effect on the pitch) will correct for the offset wrt to the actual cog
@@ -259,14 +262,14 @@ class Load(object):
         postpro.write('Half Mass           : %f\n' % (self._half_structure_mass+self._half_additional_mass))
         postpro.write('\n')
 
-        postpro.write('Center of Mass    : %f,%f\n' % (self._center_of_mass[0],self._center_of_mass[1]))
-        postpro.write('Center of Pressure: %f,%f\n' % (self._center_of_pressure[0],self._center_of_pressure[1]))
+        postpro.write('Center of Mass    : %f,%f\n' % (self._center_of_mass[0],self._center_of_mass[2]))
+        postpro.write('Center of Pressure: %f,%f\n' % (self._center_of_pressure[0],self._center_of_pressure[2]))
         postpro.write('Distance CoG-CoP x: %f\n'    % (np.sqrt((self._center_of_mass[0]-self._center_of_pressure[0])**2.0)))
-        postpro.write('Distance CoG-CoP y: %f\n'    % (np.sqrt((self._center_of_mass[1]-self._center_of_pressure[1])**2.0)))
+        postpro.write('Distance CoG-CoP z: %f\n'    % (np.sqrt((self._center_of_mass[2]-self._center_of_pressure[2])**2.0)))
         postpro.write('\n')
 
         forces_in_non_inertial_frame = non_inertial_forces+inertial_forces
-        postpro.write('Sum Forces  (Expected Zero): %f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[1]))
+        postpro.write('Sum Forces  (Expected Zero): %f,%f\n' % (forces_in_non_inertial_frame[0],forces_in_non_inertial_frame[2]))
         postpro.write('Sum Moments (Expected Zero): %f\n'    % self._pitch_moment)
         postpro.write('\n')
 
@@ -485,7 +488,7 @@ class Load(object):
                 
                 pressure = self._pdyn_inf*self._pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
                 for iDim in range(self._nDim):
-                    self._load_noninertial_bdf[iPoint_bdf][iDim] += self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial
+                    self._load_noninertial_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial # MINUS SIGN CAUSE PRESSURE PUSHES INWARD
 
                 # Friction
                 
@@ -503,20 +506,20 @@ class Load(object):
 
             # Same signe conventions as for Elevons and Body Flap
             force_x = -self._half_thrust_newtons*self._safetyFactor_thrust*np.cos(self._thrust_angle*np.pi/180.0)
-            force_y = self._half_thrust_newtons*self._safetyFactor_thrust*np.sin(self._thrust_angle*np.pi/180.0)
+            force_z = self._half_thrust_newtons*self._safetyFactor_thrust*np.sin(self._thrust_angle*np.pi/180.0)
 
             # Assume hinges are at 45 degrees
-            F0 = 0.5*(force_x-force_y)
-            F1 = 0.5*(force_x+force_y)
+            F0 = 0.5*(force_x-force_z)
+            F1 = 0.5*(force_x+force_z)
 
             if iPoint_bdf in self._apply_thrust:
                 index_thrust = self._apply_thrust.index(iPoint_bdf)
                 if index_thrust == 0:
                     self._load_noninertial_bdf[iPoint_bdf][0] += F0
-                    self._load_noninertial_bdf[iPoint_bdf][1] -= F0
+                    self._load_noninertial_bdf[iPoint_bdf][2] -= F0
                 elif index_thrust == 1:
                     self._load_noninertial_bdf[iPoint_bdf][0] += F1
-                    self._load_noninertial_bdf[iPoint_bdf][1] += F1
+                    self._load_noninertial_bdf[iPoint_bdf][2] += F1
 
 
     def __compute_apply_noninertial(self):
@@ -760,12 +763,13 @@ def read_bdf(config, nDim, nNode):
         if (line[0]=="$" and len(data) == 3):
             descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
         elif (line[0]=="G" and len(data) == 6):
-            vec = [float(data[3]), float(data[4].strip('*'))]
+            vec = [float(data[3]), float(data[4].strip('*G'))]
         elif (line[0]=="*" and len(data) == 5):
             vec.append(float(data[2]))
             coord_bdf.append(vec)
-        elif (line[0]=="C" and len(data) == 7):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+        elif (line[0]=="C" and len(data) == 6):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5])])
+            #elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
             elem_tag_bdf.append(int(data[2]))
     bdf.close()
 
@@ -787,10 +791,9 @@ def read_mesh(config, nDim, nNode):
     bdf_corresp = [0]*nPoint
     for iPoint in range(nPoint):
         data = mesh.readline().split()
-        # DO THE ROTATION + MIRROR
         coord[iPoint][0] = float(data[0])
-        coord[iPoint][1] = float(data[2])
-        coord[iPoint][2] = float(data[1])
+        coord[iPoint][1] = float(data[1])
+        coord[iPoint][2] = float(data[2])
         bdf_corresp[iPoint] = int(data[3])-1
     line = mesh.readline()
     while not isInt(line):
@@ -825,10 +828,9 @@ def read_sol(config, nDim, nNode):
     for iPoint in range(nPoint):
         data = sol.readline().split()
         pressureCoeff[iPoint] = float(data[0])
-        # DO THE ROTATION + MIRROR
         frictionCoeff[iPoint][0] = float(data[0+1])
-        frictionCoeff[iPoint][1] = float(data[2+1])
-        frictionCoeff[iPoint][2] = float(data[1+1])
+        frictionCoeff[iPoint][1] = float(data[1+1])
+        frictionCoeff[iPoint][2] = float(data[2+1])
     sol.close()
 
     return pressureCoeff, frictionCoeff
@@ -846,12 +848,14 @@ def write_load(filename,load_bdf,coord_bdf,elem_bdf):
     for iPoint_bdf in range(nPoint_bdf):
         load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
     for iElem_bdf in range(nElem_bdf):
-        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + "\n")
+        #load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+
     load.close()
 
 #: def write_load()
 
-def write_check(load_bdf,coord_bdf,elem_bdf):
+def write_check(load_bdf,coord_bdf,elem_bdf,normal_voronoi):
 
     nPoint_bdf = len(coord_bdf)
     nElem_bdf = len(elem_bdf)
@@ -860,9 +864,11 @@ def write_check(load_bdf,coord_bdf,elem_bdf):
     load_mesh.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nVertices\n' + str(nPoint_bdf) + '\n\n')
     for iPoint_bdf in range(nPoint_bdf):
         load_mesh.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(iPoint_bdf+1) + "\n")
-    load_mesh.write('\nQuadrilaterals\n' + str(nElem_bdf) + '\n\n')
+    load_mesh.write('\nTriangles\n' + str(nElem_bdf) + '\n\n')
+    #load_mesh.write('\nQuadrilaterals\n' + str(nElem_bdf) + '\n\n')
     for iElem_bdf in range(nElem_bdf):
-        load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + " 0\n")
+        load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " 0\n")
+        #load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + " 0\n")
     load_mesh.write('\nEnd\n')
     load_mesh.close()
 
@@ -872,6 +878,16 @@ def write_check(load_bdf,coord_bdf,elem_bdf):
         load_sol.write(str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
     load_sol.write('\nEnd\n')
     load_sol.close()
+
+    load_dat = open('struct_load.dat', 'w')
+    load_dat.write('TITLE = "Visualization of the surface solution"\n')
+    load_dat.write('VARIABLES = "x""y""z""nx""ny""nz"\n')
+    load_dat.write('ZONE NODES= %d, ELEMENTS= %d, DATAPACKING=POINT, ZONETYPE=FEQUADRILATERAL\n' % (nPoint_bdf, nElem_bdf))
+    for iPoint_bdf in range(nPoint_bdf):
+        load_dat.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(normal_voronoi[iPoint_bdf][0]) + " " + str(normal_voronoi[iPoint_bdf][1]) + " " + str(normal_voronoi[iPoint_bdf][2]) + "\n")
+    for iElem_bdf in range(nElem_bdf):
+        load_dat.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][2]) + "\n")
+    load_dat.close()
 
 #: def write_check()
 
@@ -894,20 +910,22 @@ def areas_normals_elem(nDim, nNode, coord_bdf, elem_bdf):
         iPoint_0 = elem_bdf[iElem_bdf][0]-1
         iPoint_1 = elem_bdf[iElem_bdf][1]-1
         iPoint_2 = elem_bdf[iElem_bdf][2]-1
-        iPoint_3 = elem_bdf[iElem_bdf][3]-1
+        #iPoint_3 = elem_bdf[iElem_bdf][3]-1
         for iDim in range(nDim):
             vec_a[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_1][iDim]
             vec_b[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_1][iDim]
-            center[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
+            center[iElem_bdf][iDim] = 0.333333333*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim])
+            #center[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
         normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
         normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
         normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
-        for iDim in range(nDim):
-            vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
-            vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
-        normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
-        normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
-        normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+        # for iDim in range(nDim):
+        #     vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
+        #     vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
+        # normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+        # normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+        # normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+
         area[iElem_bdf] += np.sqrt(normal[iElem_bdf][0]*normal[iElem_bdf][0] + normal[iElem_bdf][1]*normal[iElem_bdf][1] + normal[iElem_bdf][2]*normal[iElem_bdf][2])
 
     return area, normal, center

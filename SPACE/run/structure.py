@@ -67,11 +67,13 @@ def structure(config):
 
     # Update Values
 
-    nx = loadFactor*numpy.sin(loadAngle*numpy.pi/180.0)    
-    ny = 0.0
-    nz = -loadFactor*numpy.cos(loadAngle*numpy.pi/180.0)
+    # nx = loadFactor*numpy.sin(loadAngle*numpy.pi/180.0)    
+    # ny = 0.0
+    # nz = -loadFactor*numpy.cos(loadAngle*numpy.pi/180.0)
 
-    gravityVector = -9.81 * numpy.array([-nx,-nz,-ny])/loadFactor # Change of Frame: to Structure Frame
+
+    # NEED TO CHECK CONVENTIONS HERE !!!!!!!!!!!!!!!!!!!!!
+    gravityVector = -9.81 * numpy.array([-nx,-ny,-nz])/loadFactor # Change of Frame: to Structure Frame
 
 
     # Initial Guess
@@ -87,11 +89,7 @@ def structure(config):
     load.update(ini_half_mass_guess)
 
 
-
-
-
-
-    computeNastran(config)
+    computeNastran(config, load)
 
     #computeTacs(config)
 
@@ -115,39 +113,37 @@ def structure(config):
 
 
 
-def computeNastran(config):
+def computeNastran(config, load):
 
-    # Read bdf
-    # --------
-
-    bdf = open(config.STRUCT + '.bdf')
-    coord_bdf = []
-    elem_bdf = []
-    elem_tag_bdf = []
-    descriptions = {}
-    for line in bdf:
-        data = line.split()
-        if (line[0]=="$" and len(data) == 3):
-            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
-        elif (line[0]=="G" and len(data) == 6):
-            vec = [float(data[3]), float(data[4].strip('*'))]
-        elif (line[0]=="*" and len(data) == 5):
-            vec.append(float(data[2]))
-            coord_bdf.append(vec)
-        elif (line[0]=="C" and len(data) == 7):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
-            elem_tag_bdf.append(int(data[2]))
-    bdf.close()
-    nPoint_bdf = len(coord_bdf)
-    nElem_bdf = len(elem_bdf)
+    ini_thickness = 0.01
+    min_thickness = 0.0016
+    max_thickness = 3.0
 
     # Write bdf Nastran
     # -----------------
 
     bdf_nastran = open(config.STRUCT + '_nastran.bdf','w')
+
+    bdf_nastran.write('SOL 200\n')
+    bdf_nastran.write('TIME 600\n')
+    bdf_nastran.write('CEND\n')
+
+    bdf_nastran.write('ANALYSIS = STATICS\n')
+    bdf_nastran.write('DISPLACEMENT = ALL\n')
+    bdf_nastran.write('FORCE = ALL\n')
+    bdf_nastran.write('STRESS = ALL\n')
+
+    bdf_nastran.write('SPC = 1\n')
+    bdf_nastran.write('LOAD = 1\n')
+    bdf_nastran.write('DESOBJ = 1\n')
+    bdf_nastran.write('DESSUB = 1\n')
+
+    bdf_nastran.write('BEGIN BULK\n')
+
+    # Copy Mesh
     bdf = open(config.STRUCT + '.bdf')
     for line in bdf:
-        if (line.strip() != 'END BULK'):
+        if (line.strip() != 'BEGIN BULK' and line.strip() != 'END BULK'):
             bdf_nastran.write(line)
     bdf.close()
 
@@ -160,29 +156,18 @@ def computeNastran(config):
     bdf_nastran.write('\n')
 
     # Shell
-    for desc in descriptions.keys():
+    for desc in load._descriptions.keys():
         write_line(bdf_nastran,'PSHELL',r=8)
-        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
         write_line(bdf_nastran,'1',r=8)
         #write_line(bdf_nastran,('%.6f' % x_dvs[descriptions[desc]-1])[1:],r=8)
-        write_line(bdf_nastran,('%.6f' % 0.0016),r=8)
+        write_line(bdf_nastran,('%.6f' % ini_thickness),r=8)
         write_line(bdf_nastran,'1',r=16)
         write_line(bdf_nastran,'1',r=8)
         bdf_nastran.write('\n')
 
     # Loads
     # -----
-
-    load = open(config.LOAD_FILENAME)
-    nPoint_bdf = int(load.readline().split()[0])
-    nDim = 3
-    load_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
-    for iPoint_bdf in range(nPoint_bdf):
-        data = load.readline().split()
-        load_bdf[iPoint_bdf][0] = float(data[3])
-        load_bdf[iPoint_bdf][1] = float(data[4])
-        load_bdf[iPoint_bdf][2] = float(data[5])
-    load.close()
 
     write_line(bdf_nastran,'LOAD',r=8)
     write_line(bdf_nastran,'1',r=8)
@@ -194,64 +179,64 @@ def computeNastran(config):
     bdf_nastran.write('\n')
 
     # Force
-    for iPoint_bdf in range(nPoint_bdf):
-        if (load_bdf[iPoint_bdf][0] != 0.0 and load_bdf[iPoint_bdf][1] != 0.0 and load_bdf[iPoint_bdf][2] != 0.0):
-            write_line(bdf_nastran,'FORCE*',r=8)
-            write_line(bdf_nastran,'2',r=16)
-            write_line(bdf_nastran,'%d' % (iPoint_bdf+1),r=16)
-            write_line(bdf_nastran,'0',r=16)
-            write_line(bdf_nastran,'1.0',r=16)
-            bdf_nastran.write('*F1\n')
-            write_line(bdf_nastran,'*F1',r=8)
-            write_line(bdf_nastran,'%.8E' % load_bdf[iPoint_bdf][0],r=16)
-            write_line(bdf_nastran,'%.8E' % load_bdf[iPoint_bdf][1],r=16)
-            write_line(bdf_nastran,'%.8E' % load_bdf[iPoint_bdf][2],r=16)
-            bdf_nastran.write('\n')
+
+    for iPoint_bdf in range(load._nPoint_bdf):
+        if (load._load_bdf[iPoint_bdf][0] != 0.0 and load._load_bdf[iPoint_bdf][1] != 0.0 and load._load_bdf[iPoint_bdf][2] != 0.0):
+            write_line(bdf_nastran,'FORCE*  ')
+
+            write_line(bdf_nastran,'2',l=16)
+            write_line(bdf_nastran,'%d' % (iPoint_bdf+1),l=16)
+            write_line(bdf_nastran,'0',l=16)
+            write_line(bdf_nastran,'1.0',l=16)
+
+            write_line(bdf_nastran,'*F')
+            write_line(bdf_nastran,'%d' % (iPoint_bdf+1),l=6)            
+            write_line(bdf_nastran,'\n')
+            write_line(bdf_nastran,'*F')
+            write_line(bdf_nastran,'%d' % (iPoint_bdf+1),l=6)
+
+            write_line(bdf_nastran,'%.8E' % load._load_bdf[iPoint_bdf][0],l=16)
+            write_line(bdf_nastran,'%.8E' % load._load_bdf[iPoint_bdf][1],l=16)
+            write_line(bdf_nastran,'%.8E' % load._load_bdf[iPoint_bdf][2],l=16)
+
+            write_line(bdf_nastran,'\n')
 
     # Acceleration
-    nx = float(config.ACCELERATION_X)
-    ny = float(config.ACCELERATION_Y)
-    nz = float(config.ACCELERATION_Z)
-    loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    gravityVector = -numpy.array([-nx,-nz,-ny])/numpy.sqrt(nx*nx+ny*ny+nz*nz) # Change of Frame: to Structure Frame
+
     write_line(bdf_nastran,'GRAV',r=8)
     write_line(bdf_nastran,'3',r=8)
     write_line(bdf_nastran,'0',r=8)
     write_line(bdf_nastran,'9.81',r=8)
-    write_line(bdf_nastran,'%.3f' % gravityVector[0],r=8)
-    write_line(bdf_nastran,'%.3f' % gravityVector[1],r=8)
-    write_line(bdf_nastran,'%.3f' % gravityVector[2],r=8)
+    write_line(bdf_nastran,'%.3f' % (load._gravity_vector[0]/9.81*load._loadFactor*load._safetyFactor_inertial),r=8)
+    write_line(bdf_nastran,'%.3f' % (load._gravity_vector[1]/9.81*load._loadFactor*load._safetyFactor_inertial),r=8)
+    write_line(bdf_nastran,'%.3f' % (load._gravity_vector[2]/9.81*load._loadFactor*load._safetyFactor_inertial),r=8)
     bdf_nastran.write('\n')
 
     # Design Variables
     # ----------------
 
-    thickness = 0.0016
-    min_thickness = 0.001
-    max_thickness = 3.0
-
-    for desc in descriptions.keys():
+    for desc in load._descriptions.keys():
         write_line(bdf_nastran,'DESVAR',r=8)
-        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
-        write_line(bdf_nastran,'V_' + str(descriptions[desc]),r=8)
-        write_line(bdf_nastran,str(thickness),r=8)
+        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
+        write_line(bdf_nastran,'V_' + str(load._descriptions[desc]),r=8)
+        write_line(bdf_nastran,str(ini_thickness),r=8)
         write_line(bdf_nastran,str(min_thickness),r=8)
         write_line(bdf_nastran,str(max_thickness),r=8)
         write_line(bdf_nastran,'1.0',r=8)
         bdf_nastran.write('\n')
 
-    for desc in descriptions.keys():
+    for desc in load._descriptions.keys():
         write_line(bdf_nastran,'DVPREL1',r=8)
-        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
         write_line(bdf_nastran,'PSHELL',r=8)
-        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
         write_line(bdf_nastran,'T',r=8)
         # write_line(bdf_nastran,str(min_thickness),r=8)
         # write_line(bdf_nastran,str(max_thickness),r=8)
         # write_line(bdf_nastran,str(0.0),r=8)
         bdf_nastran.write('\n')
         write_line(bdf_nastran,'',r=8)
-        write_line(bdf_nastran,'%d' % (descriptions[desc]),r=8)
+        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
         write_line(bdf_nastran,str(1.0),r=8)
         bdf_nastran.write('\n')
 
@@ -296,7 +281,7 @@ def computeNastran(config):
         write_line(bdf_nastran,str(var),r=8)
         write_line(bdf_nastran,'',r=8)
         check = 7
-        for iElem_bdf in range(nElem_bdf):
+        for iElem_bdf in range(load._nElem_bdf):
             if (check == 8):
                 check = 0
                 bdf_nastran.write('\n')
@@ -327,8 +312,10 @@ def computeNastran(config):
     write_line(bdf_nastran,str(con_id),r=8)
     write_line(bdf_nastran,str(dresp_id),r=8)
     write_line(bdf_nastran,'1e-09',r=8)
+
     write_line(bdf_nastran,'1e7',r=8)
 #    write_line(bdf_nastran,config.MATERIAL_YIELD_STRENGTH,r=8)
+
     bdf_nastran.write('\n')
 
     # Optimization
@@ -336,17 +323,15 @@ def computeNastran(config):
 
     write_line(bdf_nastran,'DOPTPRM',r=8) 
     write_line(bdf_nastran,'DESMAX',r=8)  
-    write_line(bdf_nastran,'500',r=8)    
-    write_line(bdf_nastran,'PENAL',r=8) 
-    write_line(bdf_nastran,'0.0',r=8)    
+    write_line(bdf_nastran,'500',r=8)     
     write_line(bdf_nastran,'CT',r=8) 
     write_line(bdf_nastran,'-.03',r=8)  
     write_line(bdf_nastran,'CTMIN',r=8)    
     write_line(bdf_nastran,'.003',r=8)     
-    bdf_nastran.write('\n')
-    write_line(bdf_nastran,'',r=8) 
     write_line(bdf_nastran,'CONV1',r=8)  
     write_line(bdf_nastran,'1.-5',r=8)    
+    bdf_nastran.write('\n')
+    write_line(bdf_nastran,'',r=8) 
     write_line(bdf_nastran,'CONV2',r=8) 
     write_line(bdf_nastran,'1.-20',r=8)    
     write_line(bdf_nastran,'CONVDV',r=8) 
