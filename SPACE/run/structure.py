@@ -73,7 +73,7 @@ def structure(config):
 
 
     # NEED TO CHECK CONVENTIONS HERE !!!!!!!!!!!!!!!!!!!!!
-    gravityVector = -9.81 * numpy.array([-nx,-ny,-nz])/loadFactor # Change of Frame: to Structure Frame
+    gravityVector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
 
 
     # Initial Guess
@@ -89,9 +89,13 @@ def structure(config):
     load.update(ini_half_mass_guess)
 
 
-    computeNastran(config, load)
 
-    #computeTacs(config)
+
+    #computeNastran(config, load)
+
+    computeTacs(config, load)
+
+
 
     # # get history and objectives
 
@@ -181,7 +185,7 @@ def computeNastran(config, load):
     # Force
 
     for iPoint_bdf in range(load._nPoint_bdf):
-        if (load._load_bdf[iPoint_bdf][0] != 0.0 and load._load_bdf[iPoint_bdf][1] != 0.0 and load._load_bdf[iPoint_bdf][2] != 0.0):
+        if ((load._load_bdf[iPoint_bdf][0] != 0.0) or (load._load_bdf[iPoint_bdf][1] != 0.0) or (load._load_bdf[iPoint_bdf][2] != 0.0)):
             write_line(bdf_nastran,'FORCE*  ')
 
             write_line(bdf_nastran,'2',l=16)
@@ -313,7 +317,7 @@ def computeNastran(config, load):
     write_line(bdf_nastran,str(dresp_id),r=8)
     write_line(bdf_nastran,'1e-09',r=8)
 
-    write_line(bdf_nastran,'1e7',r=8)
+    write_line(bdf_nastran,'200e6',r=8)   # 324e6
 #    write_line(bdf_nastran,config.MATERIAL_YIELD_STRENGTH,r=8)
 
     bdf_nastran.write('\n')
@@ -323,21 +327,21 @@ def computeNastran(config, load):
 
     write_line(bdf_nastran,'DOPTPRM',r=8) 
     write_line(bdf_nastran,'DESMAX',r=8)  
-    write_line(bdf_nastran,'500',r=8)     
-    write_line(bdf_nastran,'CT',r=8) 
-    write_line(bdf_nastran,'-.03',r=8)  
-    write_line(bdf_nastran,'CTMIN',r=8)    
-    write_line(bdf_nastran,'.003',r=8)     
-    write_line(bdf_nastran,'CONV1',r=8)  
-    write_line(bdf_nastran,'1.-5',r=8)    
-    bdf_nastran.write('\n')
-    write_line(bdf_nastran,'',r=8) 
-    write_line(bdf_nastran,'CONV2',r=8) 
-    write_line(bdf_nastran,'1.-20',r=8)    
-    write_line(bdf_nastran,'CONVDV',r=8) 
-    write_line(bdf_nastran,'1.-6',r=8)  
-    write_line(bdf_nastran,'CONVPR',r=8)    
-    write_line(bdf_nastran,'1.-5',r=8)
+    write_line(bdf_nastran,'50',r=8)     
+    # write_line(bdf_nastran,'CT',r=8) 
+    # write_line(bdf_nastran,'-.03',r=8)  
+    # write_line(bdf_nastran,'CTMIN',r=8)    
+    # write_line(bdf_nastran,'.003',r=8)     
+    # write_line(bdf_nastran,'CONV1',r=8)  
+    # write_line(bdf_nastran,'1.-5',r=8)    
+    # bdf_nastran.write('\n')
+    # write_line(bdf_nastran,'',r=8) 
+    # write_line(bdf_nastran,'CONV2',r=8) 
+    # write_line(bdf_nastran,'1.-20',r=8)    
+    # write_line(bdf_nastran,'CONVDV',r=8) 
+    # write_line(bdf_nastran,'1.-6',r=8)  
+    # write_line(bdf_nastran,'CONVPR',r=8)    
+    # write_line(bdf_nastran,'1.-5',r=8)
     bdf_nastran.write('\n')
 
 # Default
@@ -390,41 +394,42 @@ def computeNastran(config, load):
 
 
 
-def computeTacs(config):
+def computeTacs(config, load):
 
     gcomm = comm = MPI.COMM_WORLD
 
     # Material properties
 
-    material_rho = float(konfig.MATERIAL_DENSITY)
-    material_E = float(konfig.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(konfig.MATERIAL_YIELD_STRENGTH) / 1.6 #1.5 #2.0 ##################################
-    material_nu = float(konfig.MATERIAL_POISSON_RATIO)
+    material_rho = float(config.MATERIAL_DENSITY)
+    material_E = float(config.MATERIAL_YOUNG_MODULUS)
+    material_ys = 80e6 #float(config.MATERIAL_YIELD_STRENGTH) / 1.6 #1.5 #2.0 ##################################
+    material_nu = float(config.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
-    t = 0.011
+    t = 0.01
     tMin = 0.0016 # 0.0016
     tMax = 3.0 # 0.020
 
     KSWeight = 80.0
     evalFuncs = ['mass','ks0','mf0']
 
-    boost_factor = 12.0 ##################################
+    boost_factor = 1.0 #12.0 ##################################
 
-    SPs = [StructProblem('lc0', loadFactor=loadFactor*boost_factor, loadFile=konfig.LOAD_FILENAME, evalFuncs=evalFuncs)]
+    SPs = [StructProblem('lc0', loadFactor=load._loadFactor*boost_factor, loadFile=config.LOAD_FILENAME, evalFuncs=evalFuncs)]
     #SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
     numLoadCases = len(SPs)
 
     # Create Solver
 
     structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
-    FEASolver = pytacs.pyTACS(konfig.STRUCT + '.bdf', comm=comm, options=structOptions)
+    FEASolver = pytacs.pyTACS(config.STRUCT + '.bdf', comm=comm, options=structOptions)
 
     # Add Design Variables
 
     ndv, corresp = addDVGroups(FEASolver)
 
     def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
+        print dvNum
         con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
         # if userDescript in ['JUNCTIONS','FRAMES','LONGERONS','SPARS']:
         #     con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, 0.05, dvNum, 0.0016, 0.05)
@@ -454,11 +459,13 @@ def computeTacs(config):
 
 
     # # # NO LOAD FACTOR VIA TACS ANYMORE, LOAD FACTOR ON STRUCTURE IS DONE VIA LOAD FILE # # #
+    # Load Factor
 
-    # # Load Factor
-    # FEASolver.setOption('gravityVector',gravityVector.tolist())
-    # for i in range(numLoadCases):
-    #     FEASolver.addInertialLoad(SPs[i])
+    # FEASolver.setOption('gravityVector',load._gravity_vector.tolist())
+    FEASolver.setOption('gravityVector',(load._gravity_vector*load._loadFactor*load._safetyFactor_inertial).tolist())
+
+    for i in range(numLoadCases):
+        FEASolver.addInertialLoad(SPs[i])
 
     history_filename = 'history_structure.dat'
     history_iteration = {'val':0}
@@ -478,9 +485,9 @@ def computeTacs(config):
         for i in range(numLoadCases):
 
             #############################################
-            load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
-            load.update(load._half_structure_mass+load._half_additional_mass)
-            SPs[i].loadFile = konfig.LOAD_FILENAME # Reset loadFile to read it again
+            # load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
+            # load.update(load._half_structure_mass+load._half_additional_mass)
+            # SPs[i].loadFile = config.LOAD_FILENAME # Reset loadFile to read it again
             #############################################
 
             FEASolver(SPs[i])
@@ -575,9 +582,9 @@ def addDVGroups(FEASolver):
         'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
     SPARS = ['MSPARF:00','MSPARF:01', # 'MSPARF:02','MSPARF:03',
         'MSPARV:00','MSPARV:01','MSPARV:02',
-        'MSPARC:00','MSPARC:04','MSPARC:05',
+        'MSPARC:00','MSPARC:06',
         'MSPARW:00','MSPARW:02','MSPARW:08'] # 'MSPARW:09'
-    STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03',
+    STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03','MSTRINGC:04','MSTRINGC:05',
         'MSTRINGW:01','MSTRINGW:03','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07']
     MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS
 
@@ -641,30 +648,18 @@ def write_files(config, FEASolver, SP, corresp, load):
     x_final = numpy.zeros(FEASolver.getNumDesignVars())
     FEASolver.structure.getDesignVars(x_final)
 
-    n_point_bdf = 0
-    elem_bdf = []
-    elem_tag_bdf = []
+    thickness_point = [0.0 for iPoint_bdf in range(load._nPoint_bdf)]
+    thickness_point_count = [0 for iPoint_bdf in range(load._nPoint_bdf)]
 
-    bdf = open(config.STRUCT + '.bdf')
-    for line in bdf:
-        data = line.split()
-        if (line[0]=="G" and len(data) == 6):
-            n_point_bdf += 1
-        elif (line[0]=="C" and len(data) == 7):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
-            elem_tag_bdf.append(int(data[2])) # REASON WHY BDF IS RED AND NOT MESH
-    bdf.close()
+    for iElem_bdf in range(load._nElem_bdf):
+        for iNode in range(load._nNode):
+            thickness_point[load._elem_bdf[iElem_bdf][iNode]-1] += x_final[corresp[load._elem_tag_bdf[iElem_bdf]-1]-1]
+            thickness_point_count[load._elem_bdf[iElem_bdf][iNode]-1] += 1
+    for iPoint_bdf in range(load._nPoint_bdf):
+        thickness_point[iPoint_bdf] = thickness_point[iPoint_bdf]/thickness_point_count[iPoint_bdf]
 
-    n_elem_bdf = len(elem_bdf)
-    thickness_point = [0.0 for i_point_bdf in range(n_point_bdf)]
-    thickness_point_count = [0 for i_point_bdf in range(n_point_bdf)]
-    for i_elem_bdf in range(n_elem_bdf):
-        for i_node in range(4):
-            thickness_point[elem_bdf[i_elem_bdf][i_node]-1] += x_final[corresp[elem_tag_bdf[i_elem_bdf]-1]-1]
-            thickness_point_count[elem_bdf[i_elem_bdf][i_node]-1] += 1
-    for i_point_bdf in range(n_point_bdf):
-        thickness_point[i_point_bdf] = thickness_point[i_point_bdf]/thickness_point_count[i_point_bdf]
     write_sol_1('thicknesses.sol',thickness_point)
+    write_tecplot('thicknesses.dat',load._coord_bdf,load._elem_bdf,thickness_point)
 
     dvs_file = 'x_final.dat'
     dvs = open(dvs_file,'w')
@@ -683,6 +678,8 @@ def write_sol_1(sol_file,solution):
     sol.write('\nEnd\n')
     sol.close()
 
+#: def write_sol_1()
+
 def write_sol_3(sol_file,solution):
  
     sol = open(sol_file,'w')
@@ -692,7 +689,28 @@ def write_sol_3(sol_file,solution):
     sol.write('\nEnd\n')
     sol.close()
 
-#: def write_sol()
+#: def write_sol_3()
+
+def write_tecplot(sol_file,coord,elem,thickness):
+ 
+    nPoint = len(coord)
+    nElem = len(elem)
+
+    file = open(sol_file,'w')
+    file.write('TITLE = "Visualization of the surface solution"\n')
+    file.write('VARIABLES = "x""y""z""thickness"\n')
+    file.write('ZONE NODES= %d, ELEMENTS= %d, DATAPACKING=POINT, ZONETYPE=FEQUADRILATERAL\n' % (nPoint, nElem))
+    for iPoint in range(nPoint):
+        file.write(str(coord[iPoint][0]) + " " + str(coord[iPoint][1]) + " " + str(coord[iPoint][2]) + " ")
+        # file.write(str(force[iPoint][0]) + " " + str(force[iPoint][1]) + " " + str(force[iPoint][2]) + " ")
+        # file.write(str(disp[iPoint][0]) + " " + str(disp[iPoint][1]) + " " + str(disp[iPoint][2]) + " ")
+        # file.write(str(rotation[iPoint][0]) + " " + str(rotation[iPoint][1]) + " " + str(rotation[iPoint][2]) + " ")
+        file.write(str(thickness[iPoint]) + "\n")
+    for iElem in range(nElem):
+        file.write(str(elem[iElem][0]) + " " + str(elem[iElem][1])  + " " + str(elem[iElem][2]) + " " + str(elem[iElem][2]) + "\n")
+    file.close()
+
+#: def write_tecplot()
 
 
 def write_line(file,line,l=0,r=0):

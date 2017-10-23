@@ -283,7 +283,7 @@ class Spaceplane(PGMconfiguration):
             afm.addCtr('MSKINC:a:%02d' % (i),'lwing','rwing',0,[idims[i],idims[i+1]])
         for i in range(idims.shape[0]-1):
             afm.addCtr('MSKINC:b:%02d' % (i),'lwing','rwing',1,[1-idims[i],1-idims[i+1]])
-        afm.addCtrVert('MSPARC:%02d' % (idims.shape[0]),'lwing','rwing',0.9)
+        #afm.addCtrVert('MSPARC:%02d' % (idims.shape[0]),'lwing','rwing',0.9)
 
         if this.tail:
             idims = np.array([0.2,0.4,0.8])
@@ -314,10 +314,10 @@ class Spaceplane(PGMconfiguration):
                 afm.addVert('MFRAME:%02d:4:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[3,1])
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]-1):
-                afm.addVert('MLONG:%02d:1:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.97],i=[0,2])
-                afm.addVert('MLONG:%02d:2:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.97],i=[1,3])
-                afm.addVert('MLONG:%02d:3:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.97],i=[2,0])
-                afm.addVert('MLONG:%02d:4:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.97],i=[3,1])
+                afm.addVert('MLONG:%02d:1:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[0,2])
+                afm.addVert('MLONG:%02d:2:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[1,3])
+                afm.addVert('MLONG:%02d:3:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[2,0])
+                afm.addVert('MLONG:%02d:4:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[3,1])
 
         afm.preview('preview')
         afm.mesh()

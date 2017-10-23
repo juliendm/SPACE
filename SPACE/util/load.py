@@ -17,7 +17,7 @@ class Load(object):
         safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
         self._nDim = 3
-        self._nNode = 3
+        self._nNode = 4
 
         self._nFrame = 13
         self._nLongeron = 4
@@ -171,11 +171,11 @@ class Load(object):
                 # Additional Mass
                 self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
 
-        # # Write load
-        # write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf)
+        # Write load
+        write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf,self._nNode)
 
-        # # Write Check
-        # write_check(self._load_bdf,self._coord_bdf,self._elem_bdf,self._normal_voronoi)
+        # Write Check
+        write_check(self._load_bdf,self._coord_bdf,self._elem_bdf,self._normal_voronoi,self._nNode)
 
     #: def load()
 
@@ -512,14 +512,12 @@ class Load(object):
             F0 = 0.5*(force_x-force_z)
             F1 = 0.5*(force_x+force_z)
 
-            if iPoint_bdf in self._apply_thrust:
-                index_thrust = self._apply_thrust.index(iPoint_bdf)
-                if index_thrust == 0:
-                    self._load_noninertial_bdf[iPoint_bdf][0] += F0
-                    self._load_noninertial_bdf[iPoint_bdf][2] -= F0
-                elif index_thrust == 1:
-                    self._load_noninertial_bdf[iPoint_bdf][0] += F1
-                    self._load_noninertial_bdf[iPoint_bdf][2] += F1
+            if iPoint_bdf in self._apply_thrust_0:
+                self._load_noninertial_bdf[iPoint_bdf][0] += F0/len(self._apply_thrust_0)
+                self._load_noninertial_bdf[iPoint_bdf][2] -= F0/len(self._apply_thrust_0)
+            if iPoint_bdf in self._apply_thrust_1:
+                self._load_noninertial_bdf[iPoint_bdf][0] += F1/len(self._apply_thrust_1)
+                self._load_noninertial_bdf[iPoint_bdf][2] += F1/len(self._apply_thrust_1)
 
 
     def __compute_apply_noninertial(self):
@@ -533,12 +531,19 @@ class Load(object):
                     if desc in self._descriptions.keys():
                         tag_thrust_frames.append(self._descriptions[desc])
 
-        tag_longerons = []
+        tag_longerons_0 = []
         for i in [0]:
             for j in range(self._nFrame-1):
-                for desc in ['MLONG:%02d:3:%02d' % (i,j), 'MLONG:%02d:4:%02d' % (i,j)]:
+                for desc in ['MLONG:%02d:3:%02d' % (i,j)]:
                     if desc in self._descriptions.keys():
-                        tag_longerons.append(self._descriptions[desc])
+                        tag_longerons_0.append(self._descriptions[desc])
+
+        tag_longerons_1 = []
+        for i in [0]:
+            for j in range(self._nFrame-1):
+                for desc in ['MLONG:%02d:4:%02d' % (i,j)]:
+                    if desc in self._descriptions.keys():
+                        tag_longerons_1.append(self._descriptions[desc])
 
         tag_members = []
         tag_skin = []
@@ -550,10 +555,13 @@ class Load(object):
 
 
         apply_thrust_frames = tag_to_apply(tag_thrust_frames, self._elem_bdf, self._elem_tag_bdf)
-        apply_longerons     = tag_to_apply(tag_longerons    , self._elem_bdf, self._elem_tag_bdf)
+        apply_longerons_0   = tag_to_apply(tag_longerons_0  , self._elem_bdf, self._elem_tag_bdf)
+        apply_longerons_1   = tag_to_apply(tag_longerons_1  , self._elem_bdf, self._elem_tag_bdf)
         apply_skin          = tag_to_apply(tag_skin         , self._elem_bdf, self._elem_tag_bdf)
 
-        self._apply_thrust = intersection(intersection(apply_thrust_frames, apply_longerons), apply_skin)
+        #self._apply_thrust = intersection(intersection(apply_thrust_frames, apply_longerons), apply_skin)
+        self._apply_thrust_0 = intersection(apply_thrust_frames, apply_longerons_0)
+        self._apply_thrust_1 = intersection(apply_thrust_frames, apply_longerons_1)
 
         # EXHAUST
 
@@ -767,9 +775,11 @@ def read_bdf(config, nDim, nNode):
         elif (line[0]=="*" and len(data) == 5):
             vec.append(float(data[2]))
             coord_bdf.append(vec)
-        elif (line[0]=="C" and len(data) == 6):
-            elem_bdf.append([int(data[3]), int(data[4]), int(data[5])])
-            #elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+        elif (line[0]=="C" and len(data) == nNode+3):
+            if (nNode > 3):
+                elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            else:
+                elem_bdf.append([int(data[3]), int(data[4]), int(data[5])])
             elem_tag_bdf.append(int(data[2]))
     bdf.close()
 
@@ -838,7 +848,7 @@ def read_sol(config, nDim, nNode):
 #: def read_sol()
 
 
-def write_load(filename,load_bdf,coord_bdf,elem_bdf):
+def write_load(filename,load_bdf,coord_bdf,elem_bdf,nNode):
 
     nPoint_bdf = len(coord_bdf)
     nElem_bdf = len(elem_bdf)
@@ -847,15 +857,18 @@ def write_load(filename,load_bdf,coord_bdf,elem_bdf):
     load.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
     for iPoint_bdf in range(nPoint_bdf):
         load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
-    for iElem_bdf in range(nElem_bdf):
-        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + "\n")
-        #load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+    if (nNode > 3):
+        for iElem_bdf in range(nElem_bdf):
+            load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+    else:
+        for iElem_bdf in range(nElem_bdf):
+            load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + "\n")
 
     load.close()
 
 #: def write_load()
 
-def write_check(load_bdf,coord_bdf,elem_bdf,normal_voronoi):
+def write_check(load_bdf,coord_bdf,elem_bdf,normal_voronoi,nNode):
 
     nPoint_bdf = len(coord_bdf)
     nElem_bdf = len(elem_bdf)
@@ -864,11 +877,16 @@ def write_check(load_bdf,coord_bdf,elem_bdf,normal_voronoi):
     load_mesh.write('\nMeshVersionFormatted\n2\n\nDimension\n3\n\nVertices\n' + str(nPoint_bdf) + '\n\n')
     for iPoint_bdf in range(nPoint_bdf):
         load_mesh.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(iPoint_bdf+1) + "\n")
-    load_mesh.write('\nTriangles\n' + str(nElem_bdf) + '\n\n')
-    #load_mesh.write('\nQuadrilaterals\n' + str(nElem_bdf) + '\n\n')
-    for iElem_bdf in range(nElem_bdf):
-        load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " 0\n")
-        #load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + " 0\n")
+    
+    if (nNode > 3):
+        load_mesh.write('\nQuadrilaterals\n' + str(nElem_bdf) + '\n\n')
+        for iElem_bdf in range(nElem_bdf):
+            load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + " 0\n")
+    else:
+        load_mesh.write('\nTriangles\n' + str(nElem_bdf) + '\n\n')
+        for iElem_bdf in range(nElem_bdf):
+            load_mesh.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " 0\n")
+    
     load_mesh.write('\nEnd\n')
     load_mesh.close()
 
@@ -885,8 +903,12 @@ def write_check(load_bdf,coord_bdf,elem_bdf,normal_voronoi):
     load_dat.write('ZONE NODES= %d, ELEMENTS= %d, DATAPACKING=POINT, ZONETYPE=FEQUADRILATERAL\n' % (nPoint_bdf, nElem_bdf))
     for iPoint_bdf in range(nPoint_bdf):
         load_dat.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(normal_voronoi[iPoint_bdf][0]) + " " + str(normal_voronoi[iPoint_bdf][1]) + " " + str(normal_voronoi[iPoint_bdf][2]) + "\n")
-    for iElem_bdf in range(nElem_bdf):
-        load_dat.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][2]) + "\n")
+    if (nNode > 3):
+        for iElem_bdf in range(nElem_bdf):
+            load_dat.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][3]) + "\n")
+    else:
+        for iElem_bdf in range(nElem_bdf):
+            load_dat.write(str(elem_bdf[iElem_bdf][0]) + " " + str(elem_bdf[iElem_bdf][1])  + " " + str(elem_bdf[iElem_bdf][2]) + " " + str(elem_bdf[iElem_bdf][2]) + "\n")
     load_dat.close()
 
 #: def write_check()
@@ -910,21 +932,24 @@ def areas_normals_elem(nDim, nNode, coord_bdf, elem_bdf):
         iPoint_0 = elem_bdf[iElem_bdf][0]-1
         iPoint_1 = elem_bdf[iElem_bdf][1]-1
         iPoint_2 = elem_bdf[iElem_bdf][2]-1
-        #iPoint_3 = elem_bdf[iElem_bdf][3]-1
+        if (nNode > 3): iPoint_3 = elem_bdf[iElem_bdf][3]-1
         for iDim in range(nDim):
             vec_a[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_1][iDim]
             vec_b[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_1][iDim]
-            center[iElem_bdf][iDim] = 0.333333333*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim])
-            #center[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
+            if (nNode > 3):
+                center[iElem_bdf][iDim] = 0.25*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim]+coord_bdf[iPoint_3][iDim])
+            else:
+                center[iElem_bdf][iDim] = 0.333333333*(coord_bdf[iPoint_0][iDim]+coord_bdf[iPoint_1][iDim]+coord_bdf[iPoint_2][iDim])
         normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
         normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
         normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
-        # for iDim in range(nDim):
-        #     vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
-        #     vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
-        # normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
-        # normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
-        # normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
+        if (nNode > 3): 
+            for iDim in range(nDim):
+                vec_a[iDim] = coord_bdf[iPoint_2][iDim]-coord_bdf[iPoint_3][iDim]
+                vec_b[iDim] = coord_bdf[iPoint_0][iDim]-coord_bdf[iPoint_3][iDim]
+            normal[iElem_bdf][0] += 0.5*(vec_a[1]*vec_b[2]-vec_a[2]*vec_b[1])
+            normal[iElem_bdf][1] += -0.5*(vec_a[0]*vec_b[2]-vec_a[2]*vec_b[0])
+            normal[iElem_bdf][2] += 0.5*(vec_a[0]*vec_b[1]-vec_a[1]*vec_b[0])
 
         area[iElem_bdf] += np.sqrt(normal[iElem_bdf][0]*normal[iElem_bdf][0] + normal[iElem_bdf][1]*normal[iElem_bdf][1] + normal[iElem_bdf][2]*normal[iElem_bdf][2])
 
