@@ -260,6 +260,7 @@ class Load(object):
         postpro.write('Half Structural Mass: %f\n' % self._half_structure_mass)
         postpro.write('Half Additional Mass: %f\n' % self._half_additional_mass)
         postpro.write('Half Mass           : %f\n' % (self._half_structure_mass+self._half_additional_mass))
+        postpro.write('Half Dry Mass       : %f\n' % (self._half_structure_mass+self._half_additional_mass-self._half_mass_payload-self._half_mass_fuel_kero-self._half_mass_fuel_lox))
         postpro.write('\n')
 
         postpro.write('Center of Mass    : %f,%f\n' % (self._center_of_mass[0],self._center_of_mass[2]))

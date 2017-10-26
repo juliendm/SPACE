@@ -38,11 +38,9 @@ def structure(config):
 
     # Safety Factors
 
-    safetyFactor_thrust = 1.0 ##################################
-    safetyFactor_inertial = 1.0 #2.0 ##################################
-    safetyFactor_non_inertial = 1.0 #2.0 ##################################
-
-
+    safetyFactor_thrust = 1.0
+    safetyFactor_inertial = 1.0
+    safetyFactor_non_inertial = 1.0
 
     # Fixed by Trajectory
 
@@ -58,22 +56,18 @@ def structure(config):
 
 
     # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
-    thrust_angle = -16.0
+    thrust_angle = 0.0
 
-
-    # Modify inputs
-    #loadFactor = ...
-    #loadAngle = 30.0 # 24.8482002334
-
-    # Update Values
-
+    # # Modify inputs
+    # loadFactor = ...
+    # loadAngle = 30.0 # 24.8482002334
     # nx = loadFactor*numpy.sin(loadAngle*numpy.pi/180.0)    
     # ny = 0.0
     # nz = -loadFactor*numpy.cos(loadAngle*numpy.pi/180.0)
 
 
-    # NEED TO CHECK CONVENTIONS HERE !!!!!!!!!!!!!!!!!!!!!
-    gravityVector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
+    # Gravity Vector
+    gravity_vector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
 
 
     # Initial Guess
@@ -85,15 +79,17 @@ def structure(config):
 
     spaceutil.surf2sol(konfig)
     SPACE_INT(konfig)
-    load = spaceutil.Load(konfig, loadFactor, gravityVector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    load = spaceutil.Load(konfig, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
     load.update(ini_half_mass_guess)
 
 
 
 
-    #computeNastran(config, load)
+    computeNastran(config, load)
 
-    computeTacs(config, load)
+    # computeTacs(config, load)
+
+    # computeSimpleTacs()
 
 
 
@@ -117,11 +113,411 @@ def structure(config):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def computeTacs(config, load):
+
+    gcomm = comm = MPI.COMM_WORLD
+
+    # Material properties
+
+    material_rho = float(config.MATERIAL_DENSITY)
+    material_E = float(config.MATERIAL_YOUNG_MODULUS)
+    material_ys = float(config.MATERIAL_YIELD_STRENGTH) / 2.7 #80e6 #80e6 ##################################
+    material_nu = float(config.MATERIAL_POISSON_RATIO)
+    kcorr = 5.0/6.0
+
+    t = 0.01
+    t_skin = 0.002
+
+    tMin = 0.0016
+
+    tMax = 3.0
+    tMax_skin = 0.003
+
+    KSWeight = 80.0
+
+    #evalFuncs = ['mass','ks0','mf0']
+    evalFuncs = ['mass','ks0','ks1','ks2','mf0']
+
+    SPs = [StructProblem('lc0', loadFactor=load._loadFactor*load._safetyFactor_inertial, loadFile=config.LOAD_FILENAME, evalFuncs=evalFuncs)]
+    numLoadCases = len(SPs)
+
+    # Create Solver
+
+    structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
+    FEASolver = pytacs.pyTACS(config.STRUCT + '.bdf', comm=comm, options=structOptions)
+
+    # Add Design Variables
+
+    ndv, corresp, SKINS, JUNCTIONS, MEMBERS = addDVGroups(FEASolver)
+
+    def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
+        if 'SKIN' in userDescript:
+            con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t_skin, dvNum, tMin, tMax_skin)
+        else:
+            con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
+        scale = [100.0]
+        return con, scale
+
+    FEASolver.createTACSAssembler(conCallBack)
+
+    assert ndv == FEASolver.getNumDesignVars()
+
+    # Add Functions
+
+    # Mass Functions
+    FEASolver.addFunction('mass', functions.StructuralMass)
+
+    # KS Functions
+    #ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
+
+    ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
+    ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
+    ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
+
+    #ksef0 = FEASolver.addFunction('ksef0', functions.KSElementFailure, KSWeight=KSWeight)
+    #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)
+    mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
+
+    #ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement)
+
+    # Load Factor
+    FEASolver.setOption('gravityVector',load._gravity_vector.tolist())
+    for i in range(numLoadCases):
+        FEASolver.addInertialLoad(SPs[i])
+
+    history_filename = 'history_structure.dat'
+    history_iteration = {'val':0}
+
+    # Process current state
+
+    x_final = numpy.zeros(FEASolver.getNumDesignVars())
+    FEASolver.structure.getDesignVars(x_final)
+    load.postprocess(x_final, corresp)
+
+    # Objective
+
+    def obj(x):
+        '''Evaluate the objective and constraints'''
+        funcs = {}
+        FEASolver.setDesignVars(x)
+
+        for i in range(numLoadCases):
+
+            #############################################
+            # load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
+            # load.update(load._half_structure_mass+load._half_additional_mass)
+            # SPs[i].loadFile = config.LOAD_FILENAME # Reset loadFile to read it again
+            #############################################
+
+            FEASolver(SPs[i])
+            FEASolver.evalFunctions(SPs[i], funcs)
+
+            if comm.rank == 0:
+                history_file = open(history_filename,'a')
+                history_file.write('%d' % history_iteration['val'])
+                for key in evalFuncs:
+                    history_file.write(',%.16f' % funcs['%s_%s'% (SPs[i].name, key)])
+                history_file.write('\n')
+                history_file.close()
+                history_iteration['val'] += 1
+
+        return funcs, False
+
+    # Sensitivies
+
+    def sens(x, funcs):
+        '''Evaluate the objective and constraint sensitivities'''
+        funcsSens = {}
+        for i in range(numLoadCases):
+            FEASolver.evalFunctionsSens(SPs[i], funcsSens)
+        return funcsSens, False
+
+
+    # Set up the optimization problem
+
+    optProb = Optimization('Mass min', obj)
+
+    history_file = open(history_filename,'w')
+    history_file.write('VARIABLES = "Iteration"')
+
+    for i in range(numLoadCases):
+
+        obj_name = '%s_%s'% (SPs[i].name, 'mass')
+        optProb.addObj(obj_name)
+        history_file.write(',"%s"' % obj_name)
+
+        FEASolver.addVariablesPyOpt(optProb)
+
+        for j in xrange(3):
+            con_name = '%s_ks%d'% (SPs[i].name, j)
+            optProb.addCon(con_name, lower=1.0, upper=1.0)
+            history_file.write(',"%s"' % con_name)
+        for j in xrange(1):
+            con_name = '%s_mf%d'% (SPs[i].name, j)
+            #optProb.addCon(con_name, lower=1.0, upper=1.0)
+            history_file.write(',"%s"' % con_name)
+
+    history_file.write('\n')
+    history_file.close()
+
+    if comm.rank == 0:
+        print optProb
+    optProb.printSparsity()
+
+    opt = OPT('snopt',options={
+        'Major feasibility tolerance':1e-6,
+        'Major optimality tolerance':1e-6,
+        'Minor feasibility tolerance':1e-6,
+        'Iterations limit':100000,
+        'Major iterations limit':1000,
+        'Minor iterations limit':500,
+        'Major step limit':2.0})
+
+    # Solve
+
+    sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
+
+    # Write Files
+
+    print_tag = []
+    for key_in in JUNCTIONS + MEMBERS:
+        for key_desc in load._descriptions:
+            if key_in.upper() in key_desc:
+                print_tag.append(load._descriptions[key_desc])
+
+    write_files(config, FEASolver, SPs[0], corresp, load, print_tag)
+
+#: def computeTacs()
+
+def addDVGroups(FEASolver):
+
+    # SKIN
+
+    SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','FUSE_R','CTAIL:LOW','CTAIL_T::1']
+    SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FUSE_F'] # 'FLAP_T',
+    SKIN_WING_U = ['LWING:UPP','LWING_T::0']
+    SKIN_WING_L = ['LWING:LOW','LWING_T::1']
+    SKINS = SKIN_FUSE_U + SKIN_FUSE_L + SKIN_WING_U + SKIN_WING_L
+
+    # JUNCTIONS
+
+    JUNCTIONS = ['FLAP_FUSE','LWING_FUSE','CTAIL_FUSE']
+
+    # MEMBERS
+
+    FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
+        'MFRAME:10','MFRAME:11','MFRAME:12']
+    LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
+    RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
+        'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
+        'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
+    SPARS = ['MSPARF:00','MSPARF:01', # 'MSPARF:02','MSPARF:03',
+        'MSPARV:00','MSPARV:01','MSPARV:02',
+        'MSPARC:00','MSPARC:06',
+        'MSPARW:00','MSPARW:02','MSPARW:08'] # 'MSPARW:09'
+    STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03','MSTRINGC:04','MSTRINGC:05',
+        'MSTRINGW:01','MSTRINGW:03','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07']
+    MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS + ['MSKINC:a','MSKINC:b']
+
+    assert len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]) == FEASolver.nComp
+
+    corresp = [-1 for index in range(FEASolver.nComp)]
+    ndv = 0;
+
+    group_skin = False
+    group_junction = True
+
+    if group_skin:
+        for i in range(len(SKINS)):
+            dv_name = "SKIN_" + str(i) # SKINS[i]
+            FEASolver.addDVGroup(dv_name, include = SKINS[i])
+            ndv = ndv+1;
+            SKIN_IDS_I = FEASolver.selectCompIDs(include=SKINS[i])[0]
+            for k in range(len(SKIN_IDS_I)):
+                corresp[SKIN_IDS_I[k]] = ndv;
+    else:
+        SKIN_IDS = FEASolver.selectCompIDs(include=SKINS)[0]
+        for i in range(len(SKIN_IDS)):
+            dv_name = "SKIN_" + str(i)
+            FEASolver.addDVGroup(dv_name, include = SKIN_IDS[i])
+            ndv = ndv+1;
+            corresp[SKIN_IDS[i]] = ndv;
+
+    if group_junction:
+        for i in range(len(JUNCTIONS)):
+            dv_name = "JUNCTION_" + str(i) # JUNCTIONS[i]
+            FEASolver.addDVGroup(dv_name, include = JUNCTIONS[i])
+            ndv = ndv+1;
+            JUNCTIONS_IDS_I = FEASolver.selectCompIDs(include=JUNCTIONS[i])[0]
+            for k in range(len(JUNCTIONS_IDS_I)):
+                corresp[JUNCTIONS_IDS_I[k]] = ndv;
+    else:
+        JUNCTION_IDS = FEASolver.selectCompIDs(include=JUNCTIONS)[0]
+        for i in range(len(JUNCTION_IDS)):
+            dv_name = "JUNCTION_" + str(i)
+            FEASolver.addDVGroup(dv_name, include = JUNCTION_IDS[i])
+            ndv = ndv+1;
+            corresp[JUNCTION_IDS[i]] = ndv;
+
+    for i in range(len(MEMBERS)):
+        dv_name = "MEMBER_" + str(i) # MEMBERS[i]
+        FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
+        ndv = ndv+1;
+        MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
+        for k in range(len(MEMBERS_IDS_I)):
+            corresp[MEMBERS_IDS_I[k]] = ndv;
+
+    return ndv, corresp, SKINS, JUNCTIONS, MEMBERS
+
+    # ncoms = FEASolver.nComp
+    # for i in range(0,ncoms):
+    #     dv_name = 'stru_'+str(i)
+    #     FEASolver.addDVGroup(dv_name, include = i)
+
+#: def addDVGroups()
+
+def computeSimpleTacs():
+
+    bdf_file = '../beam.bdf'
+    load_file = 'load_distribution.txt'
+
+    # Material properties
+
+    material_rho = 2780.0
+    material_E = 72.0E9
+    material_nu = 0.33
+    material_ys = 324.0E6
+    kcorr = 5.0/6.0
+
+    load_factor = 3.0
+
+    F = 100000.0
+    b = 10.0
+    h = 5.0
+    L = 110.0
+    w = 9.81*load_factor*b*h*material_rho
+    beam_I = b*h**3.0/12.0
+    delta_F = F*L**3.0/(3.0*material_E*beam_I) # Load
+    delta_G = w*L**4.0/(8.0*material_E*beam_I) # Gravity
+    print "Disp F: ", delta_F
+    print "Disp G: ", delta_G
+
+    # READ
+
+    bdf = open(bdf_file)
+    coord_bdf = []
+    elem_bdf = []
+    elem_tag_bdf = []
+    descriptions = {}
+    for line in bdf:
+        data = line.split()
+        if (line[0]=="$" and len(data) == 3):
+            descriptions[data[2].strip().split('/')[0].upper()] = int(data[1])
+        if (line[0]=="G" and len(data) == 4):
+            vec = [float(data[2]), float(data[3].split('*')[0])]
+        elif (line[0]=="*" and len(data) == 2):
+            vec.append(float(data[1]))
+            coord_bdf.append(vec)
+        elif (line[0]=="C" and len(data) == 8):
+            elem_bdf.append([int(data[3]), int(data[4]), int(data[5]), int(data[6])])
+            elem_tag_bdf.append(int(data[2]))
+    bdf.close()
+
+    nPoint_bdf = len(coord_bdf)
+    nElem_bdf = len(elem_bdf)
+
+    print nPoint_bdf
+    print nElem_bdf
+
+    # LOAD
+
+    nDim = 3
+    load_bdf = [[0.0 for iDim in range(nDim)] for iPoint_bdf in range(nPoint_bdf)]
+
+    #load_bdf[50] = [0.0, 0.0, F]
+
+    # WRITE
+
+    load = open(load_file,"w")
+    load.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
+    for iPoint_bdf in range(nPoint_bdf):
+        load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
+    for iElem_bdf in range(nElem_bdf):
+        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+    load.close()
+
+    gcomm = comm = MPI.COMM_WORLD
+
+
+
+    t = h
+    tMin = 0.0016
+    tMax = 2.0*h
+
+    SPs = [StructProblem('lc0', loadFactor=load_factor, loadFile=load_file)]
+    numLoadCases = len(SPs)
+
+    # Create Solver
+
+    structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
+    FEASolver = pytacs.pyTACS(bdf_file, comm=comm, options=structOptions)
+
+    # Add Design Variables
+
+    ncoms = FEASolver.nComp
+    for i in range(0,ncoms):
+        dv_name = 'stru_'+str(i)
+        FEASolver.addDVGroup(dv_name, include = i)
+
+    def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
+        con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
+        scale = [100.0]
+        return con, scale
+
+    FEASolver.createTACSAssembler(conCallBack)
+
+    # NO load_factor HERE !!!!!!!!!!!!! Already taken into account in StructProblem definition
+    FEASolver.setOption('gravityVector',(9.81*numpy.array([0.0,0.0,-1.0])).tolist()) 
+    for i in range(numLoadCases):
+        FEASolver.addInertialLoad(SPs[i])
+
+    for i in range(numLoadCases):
+        FEASolver(SPs[i])
+        disp = FEASolver.writeMeshDisplacements(SPs[i], "beam_disp.sol")
+        force = FEASolver.writeMeshForces(SPs[i], "beam_force.sol")
+        thickness = [0.0 for iPoint_bdf in range(nPoint_bdf)]
+
+        write_tecplot("beam.dat",coord_bdf,elem_bdf,force,disp,thickness)
+
+#: def computeSimpleTacs()
+
+
 def computeNastran(config, load):
 
     ini_thickness = 0.01
     min_thickness = 0.0016
     max_thickness = 3.0
+
+    thickness_tag = numpy.loadtxt('thickness_final.dat')
 
     # Write bdf Nastran
     # -----------------
@@ -147,7 +543,59 @@ def computeNastran(config, load):
     # Copy Mesh
     bdf = open(config.STRUCT + '.bdf')
     for line in bdf:
-        if (line.strip() != 'BEGIN BULK' and line.strip() != 'END BULK'):
+        string = line.strip()
+        if (string[0] == '$' or string[0] == 'G' or string[0] == '*'):
+            bdf_nastran.write(line)
+    bdf.close()
+
+    for iElem_bdf in range(load._nElem_bdf):
+
+        coord_0 = load._coord_bdf[load._elem_bdf[iElem_bdf][0]-1]
+        coord_1 = load._coord_bdf[load._elem_bdf[iElem_bdf][1]-1]
+        coord_2 = load._coord_bdf[load._elem_bdf[iElem_bdf][2]-1]
+        coord_3 = load._coord_bdf[load._elem_bdf[iElem_bdf][3]-1]
+
+        if (index_max_angle(coord_0,coord_1,coord_2,coord_3) in [0,2]):
+
+            write_line(bdf_nastran,'CTRIA3',r=8)
+            write_line(bdf_nastran,str(2*iElem_bdf+1),r=8)
+            write_line(bdf_nastran,str(load._elem_tag_bdf[iElem_bdf]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][0]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][1]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][2]),r=8)
+            bdf_nastran.write('\n')
+
+            write_line(bdf_nastran,'CTRIA3',r=8)
+            write_line(bdf_nastran,str(2*iElem_bdf+2),r=8)
+            write_line(bdf_nastran,str(load._elem_tag_bdf[iElem_bdf]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][2]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][3]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][0]),r=8)
+            bdf_nastran.write('\n')
+
+        else:
+
+            write_line(bdf_nastran,'CTRIA3',r=8)
+            write_line(bdf_nastran,str(2*iElem_bdf+1),r=8)
+            write_line(bdf_nastran,str(load._elem_tag_bdf[iElem_bdf]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][1]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][2]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][3]),r=8)
+            bdf_nastran.write('\n')
+
+            write_line(bdf_nastran,'CTRIA3',r=8)
+            write_line(bdf_nastran,str(2*iElem_bdf+2),r=8)
+            write_line(bdf_nastran,str(load._elem_tag_bdf[iElem_bdf]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][3]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][0]),r=8)
+            write_line(bdf_nastran,str(load._elem_bdf[iElem_bdf][1]),r=8)
+            bdf_nastran.write('\n')
+
+    # Copy Mesh
+    bdf = open(config.STRUCT + '.bdf')
+    for line in bdf:
+        string = line.strip()
+        if (string[0] == 'S'):
             bdf_nastran.write(line)
     bdf.close()
 
@@ -164,8 +612,8 @@ def computeNastran(config, load):
         write_line(bdf_nastran,'PSHELL',r=8)
         write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
         write_line(bdf_nastran,'1',r=8)
-        #write_line(bdf_nastran,('%.6f' % x_dvs[descriptions[desc]-1])[1:],r=8)
-        write_line(bdf_nastran,('%.6f' % ini_thickness),r=8)
+        write_line(bdf_nastran,('%.6f' % thickness_tag[load._descriptions[desc]-1]),r=8)
+        #write_line(bdf_nastran,('%.5f' % ini_thickness),r=8)
         write_line(bdf_nastran,'1',r=16)
         write_line(bdf_nastran,'1',r=8)
         bdf_nastran.write('\n')
@@ -216,156 +664,161 @@ def computeNastran(config, load):
     write_line(bdf_nastran,'%.3f' % (load._gravity_vector[2]/9.81*load._loadFactor*load._safetyFactor_inertial),r=8)
     bdf_nastran.write('\n')
 
-    # Design Variables
-    # ----------------
 
-    for desc in load._descriptions.keys():
-        write_line(bdf_nastran,'DESVAR',r=8)
-        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
-        write_line(bdf_nastran,'V_' + str(load._descriptions[desc]),r=8)
-        write_line(bdf_nastran,str(ini_thickness),r=8)
-        write_line(bdf_nastran,str(min_thickness),r=8)
-        write_line(bdf_nastran,str(max_thickness),r=8)
-        write_line(bdf_nastran,'1.0',r=8)
-        bdf_nastran.write('\n')
+    optimise = False
 
-    for desc in load._descriptions.keys():
-        write_line(bdf_nastran,'DVPREL1',r=8)
-        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
-        write_line(bdf_nastran,'PSHELL',r=8)
-        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
-        write_line(bdf_nastran,'T',r=8)
-        # write_line(bdf_nastran,str(min_thickness),r=8)
-        # write_line(bdf_nastran,str(max_thickness),r=8)
-        # write_line(bdf_nastran,str(0.0),r=8)
-        bdf_nastran.write('\n')
-        write_line(bdf_nastran,'',r=8)
-        write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
-        write_line(bdf_nastran,str(1.0),r=8)
-        bdf_nastran.write('\n')
+    if optimise:
 
-    # Objective
-    # ---------
+        # Design Variables
+        # ----------------
 
-    dresp_id = 0
+        for desc in load._descriptions.keys():
+            write_line(bdf_nastran,'DESVAR',r=8)
+            write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
+            write_line(bdf_nastran,'V_' + str(load._descriptions[desc]),r=8)
+            write_line(bdf_nastran,str(ini_thickness),r=8)
+            write_line(bdf_nastran,str(min_thickness),r=8)
+            write_line(bdf_nastran,str(max_thickness),r=8)
+            write_line(bdf_nastran,'1.0',r=8)
+            bdf_nastran.write('\n')
 
-    write_line(bdf_nastran,'DRESP1',r=8)
-    dresp_id += 1
-    write_line(bdf_nastran,str(dresp_id),r=8)
-    write_line(bdf_nastran,'W',r=8)
-    write_line(bdf_nastran,'WEIGHT',r=8)
-    bdf_nastran.write('\n')
+        for desc in load._descriptions.keys():
+            write_line(bdf_nastran,'DVPREL1',r=8)
+            write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
+            write_line(bdf_nastran,'PSHELL',r=8)
+            write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
+            write_line(bdf_nastran,'T',r=8)
+            # write_line(bdf_nastran,str(min_thickness),r=8)
+            # write_line(bdf_nastran,str(max_thickness),r=8)
+            # write_line(bdf_nastran,str(0.0),r=8)
+            bdf_nastran.write('\n')
+            write_line(bdf_nastran,'',r=8)
+            write_line(bdf_nastran,'%d' % (load._descriptions[desc]),r=8)
+            write_line(bdf_nastran,str(1.0),r=8)
+            bdf_nastran.write('\n')
 
-    # Constraints
-    # -----------
+        # Objective
+        # ---------
 
-    con_id = 0
+        dresp_id = 0
 
-    con_id += 1
-    write_line(bdf_nastran,'DCONADD',r=8)
-    write_line(bdf_nastran,str(con_id),r=8)
-    write_line(bdf_nastran,str(con_id+1),r=8)
-    # write_line(bdf_nastran,str(con_id+2),r=8)
-    bdf_nastran.write('\n')
-
-    # Stresses
-    con_id += 1
-
-    var_stress = [9,17]
-    for var in var_stress:
         write_line(bdf_nastran,'DRESP1',r=8)
         dresp_id += 1
         write_line(bdf_nastran,str(dresp_id),r=8)
-        if (var == 9):
-            write_line(bdf_nastran,'VMSTR1',r=8)
-        elif (var == 17):
-            write_line(bdf_nastran,'VMSTR2',r=8)
-        write_line(bdf_nastran,'STRESS',r=8)
-        write_line(bdf_nastran,'ELEM',r=16)
-        write_line(bdf_nastran,str(var),r=8)
-        write_line(bdf_nastran,'',r=8)
-        check = 7
-        for iElem_bdf in range(load._nElem_bdf):
-            if (check == 8):
-                check = 0
+        write_line(bdf_nastran,'W',r=8)
+        write_line(bdf_nastran,'WEIGHT',r=8)
+        bdf_nastran.write('\n')
+
+        # Constraints
+        # -----------
+
+        con_id = 0
+
+        con_id += 1
+        write_line(bdf_nastran,'DCONADD',r=8)
+        write_line(bdf_nastran,str(con_id),r=8)
+        write_line(bdf_nastran,str(con_id+1),r=8)
+        # write_line(bdf_nastran,str(con_id+2),r=8)
+        bdf_nastran.write('\n')
+
+        # Stresses
+        con_id += 1
+
+        var_stress = [9,17]
+        for var in var_stress:
+            write_line(bdf_nastran,'DRESP1',r=8)
+            dresp_id += 1
+            write_line(bdf_nastran,str(dresp_id),r=8)
+            if (var == 9):
+                write_line(bdf_nastran,'VMSTR1',r=8)
+            elif (var == 17):
+                write_line(bdf_nastran,'VMSTR2',r=8)
+            write_line(bdf_nastran,'STRESS',r=8)
+            write_line(bdf_nastran,'ELEM',r=16)
+            write_line(bdf_nastran,str(var),r=8)
+            write_line(bdf_nastran,'',r=8)
+            check = 7
+            for iElem_bdf in range(load._nElem_bdf):
+                if (check == 8):
+                    check = 0
+                    bdf_nastran.write('\n')
+                    write_line(bdf_nastran,'',r=8)
+                check +=1
+                write_line(bdf_nastran,str(iElem_bdf+1),r=8)
+            if (check != 0):
                 bdf_nastran.write('\n')
-                write_line(bdf_nastran,'',r=8)
-            check +=1
-            write_line(bdf_nastran,str(iElem_bdf+1),r=8)
-        if (check != 0):
-            bdf_nastran.write('\n')
 
-    write_line(bdf_nastran,'DRESP2',r=8)
-    dresp_id += 1
-    write_line(bdf_nastran,str(dresp_id),r=8)
-    write_line(bdf_nastran,'MAXVM',r=8)
-    write_line(bdf_nastran,str(con_id),r=8)
-    bdf_nastran.write('\n')
-    write_line(bdf_nastran,'',r=8)
-    write_line(bdf_nastran,'DRESP1',r=8)
-    for iDim in range(len(var_stress)):
-        write_line(bdf_nastran,str(dresp_id-len(var_stress)+iDim),r=8)
-    bdf_nastran.write('\n')
+        write_line(bdf_nastran,'DRESP2',r=8)
+        dresp_id += 1
+        write_line(bdf_nastran,str(dresp_id),r=8)
+        write_line(bdf_nastran,'MAXVM',r=8)
+        write_line(bdf_nastran,str(con_id),r=8)
+        bdf_nastran.write('\n')
+        write_line(bdf_nastran,'',r=8)
+        write_line(bdf_nastran,'DRESP1',r=8)
+        for iDim in range(len(var_stress)):
+            write_line(bdf_nastran,str(dresp_id-len(var_stress)+iDim),r=8)
+        bdf_nastran.write('\n')
 
-    write_line(bdf_nastran,'DEQATN',r=8)
-    write_line(bdf_nastran,str(con_id),r=8)
-    bdf_nastran.write('MAXVM(VMSTR1,VMSTR2)=MAX(VMSTR1,VMSTR2)')
-    bdf_nastran.write('\n')
+        write_line(bdf_nastran,'DEQATN',r=8)
+        write_line(bdf_nastran,str(con_id),r=8)
+        bdf_nastran.write('MAXVM(VMSTR1,VMSTR2)=MAX(VMSTR1,VMSTR2)')
+        bdf_nastran.write('\n')
 
-    write_line(bdf_nastran,'DCONSTR',r=8)
-    write_line(bdf_nastran,str(con_id),r=8)
-    write_line(bdf_nastran,str(dresp_id),r=8)
-    write_line(bdf_nastran,'1e-09',r=8)
+        write_line(bdf_nastran,'DCONSTR',r=8)
+        write_line(bdf_nastran,str(con_id),r=8)
+        write_line(bdf_nastran,str(dresp_id),r=8)
+        write_line(bdf_nastran,'1e-09',r=8)
 
-    write_line(bdf_nastran,'200e6',r=8)   # 324e6
-#    write_line(bdf_nastran,config.MATERIAL_YIELD_STRENGTH,r=8)
+        write_line(bdf_nastran,'200e6',r=8)   # 324e6
+    #    write_line(bdf_nastran,config.MATERIAL_YIELD_STRENGTH,r=8)
 
-    bdf_nastran.write('\n')
+        bdf_nastran.write('\n')
 
-    # Optimization
-    # ------------
+        # Optimization
+        # ------------
 
-    write_line(bdf_nastran,'DOPTPRM',r=8) 
-    write_line(bdf_nastran,'DESMAX',r=8)  
-    write_line(bdf_nastran,'50',r=8)     
-    # write_line(bdf_nastran,'CT',r=8) 
-    # write_line(bdf_nastran,'-.03',r=8)  
-    # write_line(bdf_nastran,'CTMIN',r=8)    
-    # write_line(bdf_nastran,'.003',r=8)     
-    # write_line(bdf_nastran,'CONV1',r=8)  
-    # write_line(bdf_nastran,'1.-5',r=8)    
-    # bdf_nastran.write('\n')
-    # write_line(bdf_nastran,'',r=8) 
-    # write_line(bdf_nastran,'CONV2',r=8) 
-    # write_line(bdf_nastran,'1.-20',r=8)    
-    # write_line(bdf_nastran,'CONVDV',r=8) 
-    # write_line(bdf_nastran,'1.-6',r=8)  
-    # write_line(bdf_nastran,'CONVPR',r=8)    
-    # write_line(bdf_nastran,'1.-5',r=8)
-    bdf_nastran.write('\n')
+        write_line(bdf_nastran,'DOPTPRM',r=8) 
+        write_line(bdf_nastran,'DESMAX',r=8)  
+        write_line(bdf_nastran,'50',r=8)     
+        # write_line(bdf_nastran,'CT',r=8) 
+        # write_line(bdf_nastran,'-.03',r=8)  
+        # write_line(bdf_nastran,'CTMIN',r=8)    
+        # write_line(bdf_nastran,'.003',r=8)     
+        # write_line(bdf_nastran,'CONV1',r=8)  
+        # write_line(bdf_nastran,'1.-5',r=8)    
+        # bdf_nastran.write('\n')
+        # write_line(bdf_nastran,'',r=8) 
+        # write_line(bdf_nastran,'CONV2',r=8) 
+        # write_line(bdf_nastran,'1.-20',r=8)    
+        # write_line(bdf_nastran,'CONVDV',r=8) 
+        # write_line(bdf_nastran,'1.-6',r=8)  
+        # write_line(bdf_nastran,'CONVPR',r=8)    
+        # write_line(bdf_nastran,'1.-5',r=8)
+        bdf_nastran.write('\n')
 
-# Default
+        # Default
 
-# CONV1 0.001       Objective relative change 2 iterations
-# CONV2 1.0E-20     Objective absolute change 2 iterations
-# CONVDV 0.0001     Design variables
-# CONVPR 0.001      Properties
-# CT -0.03          Constraint tolerance (active if value greater than CT)
-# CTMIN 0.003                            (violated if value greater than CTMIN)
+        # CONV1 0.001       Objective relative change 2 iterations
+        # CONV2 1.0E-20     Objective absolute change 2 iterations
+        # CONVDV 0.0001     Design variables
+        # CONVPR 0.001      Properties
+        # CT -0.03          Constraint tolerance (active if value greater than CT)
+        # CTMIN 0.003                            (violated if value greater than CTMIN)
 
-# DELB 0.0001       Relative finite difference move parameter
-# DELP 0.2          Properties: Fractional change allowed
-# DELX 0.5          Design variables: Fractional change allowed
+        # DELB 0.0001       Relative finite difference move parameter
+        # DELP 0.2          Properties: Fractional change allowed
+        # DELX 0.5          Design variables: Fractional change allowed
 
-# DESMAX 5
+        # DESMAX 5
 
-# DPMAX 0.5
-# DPMIN 0.01        Properties: Minimum move limit
+        # DPMAX 0.5
+        # DPMIN 0.01        Properties: Minimum move limit
 
-# DXMAX 1.0
-# DXMIN 0.05        Design variables: Minimum move limit
+        # DXMAX 1.0
+        # DXMIN 0.05        Design variables: Minimum move limit
 
-# PENAL 0.0         Improve perfo if starting design is infeasible when e.g. 2.0
+        # PENAL 0.0         Improve perfo if starting design is infeasible when e.g. 2.0
 
     bdf_nastran.write('ENDDATA\n')
 
@@ -375,297 +828,59 @@ def computeNastran(config, load):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def computeTacs(config, load):
-
-    gcomm = comm = MPI.COMM_WORLD
-
-    # Material properties
-
-    material_rho = float(config.MATERIAL_DENSITY)
-    material_E = float(config.MATERIAL_YOUNG_MODULUS)
-    material_ys = 80e6 #float(config.MATERIAL_YIELD_STRENGTH) / 1.6 #1.5 #2.0 ##################################
-    material_nu = float(config.MATERIAL_POISSON_RATIO)
-    kcorr = 5.0/6.0
-
-    t = 0.01
-    tMin = 0.0016 # 0.0016
-    tMax = 3.0 # 0.020
-
-    KSWeight = 80.0
-    evalFuncs = ['mass','ks0','mf0']
-
-    boost_factor = 1.0 #12.0 ##################################
-
-    SPs = [StructProblem('lc0', loadFactor=load._loadFactor*boost_factor, loadFile=config.LOAD_FILENAME, evalFuncs=evalFuncs)]
-    #SPs = [StructProblem('lc0', loadFactor=loadFactor*safetyFactor_inertial, loadFile=konfig.LOAD_FILENAME, evalFuncs=['mass','ks0','ks1','ks2'])]
-    numLoadCases = len(SPs)
-
-    # Create Solver
-
-    structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
-    FEASolver = pytacs.pyTACS(config.STRUCT + '.bdf', comm=comm, options=structOptions)
-
-    # Add Design Variables
-
-    ndv, corresp = addDVGroups(FEASolver)
-
-    def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
-        print dvNum
-        con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
-        # if userDescript in ['JUNCTIONS','FRAMES','LONGERONS','SPARS']:
-        #     con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, 0.05, dvNum, 0.0016, 0.05)
-        scale = [100.0]
-        return con, scale
-
-    FEASolver.createTACSAssembler(conCallBack)
-
-    assert ndv == FEASolver.getNumDesignVars()
-
-    # Add Functions
-
-    # Mass Functions
-    FEASolver.addFunction('mass', functions.StructuralMass)
-
-    # KS Functions
-    ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
-    #ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, include=RIBS+SPARS+FRAMES+LONGERONS+WING_BOX, loadFactor=1.0)
-    #ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=SKIN_U+STRINGERS_U, loadFactor=1.0)
-    #ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=SKIN_L+STRINGERS_L, loadFactor=1.0)
-
-    #ksef0 = FEASolver.addFunction('ksef0', functions.KSElementFailure, KSWeight=KSWeight)
-    #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)
-    mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
-
-    #ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement)
-
-
-    # # # NO LOAD FACTOR VIA TACS ANYMORE, LOAD FACTOR ON STRUCTURE IS DONE VIA LOAD FILE # # #
-    # Load Factor
-
-    # FEASolver.setOption('gravityVector',load._gravity_vector.tolist())
-    FEASolver.setOption('gravityVector',(load._gravity_vector*load._loadFactor*load._safetyFactor_inertial).tolist())
-
-    for i in range(numLoadCases):
-        FEASolver.addInertialLoad(SPs[i])
-
-    history_filename = 'history_structure.dat'
-    history_iteration = {'val':0}
-
-    # Process current state
-
-    x_final = numpy.zeros(FEASolver.getNumDesignVars())
-    FEASolver.structure.getDesignVars(x_final)
-    load.postprocess(x_final, corresp)
-
-    # Objective
-
-    def obj(x):
-        '''Evaluate the objective and constraints'''
-        funcs = {}
-        FEASolver.setDesignVars(x)
-        for i in range(numLoadCases):
-
-            #############################################
-            # load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
-            # load.update(load._half_structure_mass+load._half_additional_mass)
-            # SPs[i].loadFile = config.LOAD_FILENAME # Reset loadFile to read it again
-            #############################################
-
-            FEASolver(SPs[i])
-            FEASolver.evalFunctions(SPs[i], funcs)
-        if comm.rank == 0:
-            history_file = open(history_filename,'a')
-            history_file.write('%d' % history_iteration['val'])
-            for key in funcs.keys():
-                history_file.write(',%.16f' % funcs[key])
-            history_file.write('\n')
-            history_file.close()
-            history_iteration['val'] += 1
-        return funcs, False
-
-    # Sensitivies
-
-    def sens(x, funcs):
-        '''Evaluate the objective and constraint sensitivities'''
-        funcsSens = {}
-        for i in range(numLoadCases):
-            FEASolver.evalFunctionsSens(SPs[i], funcsSens)
-        return funcsSens, False
-
-
-    # Set up the optimization problem
-
-    history_file = open(history_filename,'w')
-    history_file.write('VARIABLES = "Iteration"')
-
-    optProb = Optimization('Mass min', obj)
-    obj_name = 'lc0_mass'
-    optProb.addObj(obj_name)
-    history_file.write(',"%s"' % obj_name)
-    FEASolver.addVariablesPyOpt(optProb)
-    for i in range(numLoadCases):
-        for j in xrange(1):
-            con_name = '%s_ks%d'% (SPs[i].name, j)
-            optProb.addCon(con_name, lower=1.0, upper=1.0)
-            history_file.write(',"%s"' % con_name)
-            con_name = '%s_mf%d'% (SPs[i].name, j)
-            #optProb.addCon(con_name, lower=1.0, upper=1.0)
-            history_file.write(',"%s"' % con_name)
-    history_file.write('\n')
-    history_file.close()
-
-    if comm.rank == 0:
-        print optProb
-    optProb.printSparsity()
-
-    opt = OPT('snopt',options={
-        'Major feasibility tolerance':1e-6,
-        'Major optimality tolerance':1e-6,
-        'Minor feasibility tolerance':1e-6,
-        'Iterations limit':100000,
-        'Major iterations limit':3000,
-        'Minor iterations limit':500,
-        'Major step limit':2.0})
-
-    # Solve
-
-    sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
-
-    # Write Files
-
-    write_files(config, FEASolver, SPs[0], corresp, load)
-
-#: def computeTacs()
-
-
-
-def addDVGroups(FEASolver):
-
-    # SKIN
-
-    SKIN_FUSE_U = ['FUSE:TOP','FUSE:LFT','FUSE_R','CTAIL:LOW','CTAIL_T::1']
-    SKIN_FUSE_L = ['FUSE:BOT','FLAP:UPP','FLAP:LOW','FUSE_F'] # 'FLAP_T',
-    SKIN_WING_U = ['LWING:UPP','LWING_T::0']
-    SKIN_WING_L = ['LWING:LOW','LWING_T::1']
-    SKINS = SKIN_FUSE_U + SKIN_FUSE_L + SKIN_WING_U + SKIN_WING_L + ['MSKINC:a','MSKINC:b']
-
-    # JUNCTIONS
-
-    JUNCTIONS = ['FLAP_FUSE','LWING_FUSE','CTAIL_FUSE']
-
-    # MEMBERS
-
-    FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
-        'MFRAME:10','MFRAME:11','MFRAME:12']
-    LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
-    RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
-        'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
-        'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
-    SPARS = ['MSPARF:00','MSPARF:01', # 'MSPARF:02','MSPARF:03',
-        'MSPARV:00','MSPARV:01','MSPARV:02',
-        'MSPARC:00','MSPARC:06',
-        'MSPARW:00','MSPARW:02','MSPARW:08'] # 'MSPARW:09'
-    STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03','MSTRINGC:04','MSTRINGC:05',
-        'MSTRINGW:01','MSTRINGW:03','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07']
-    MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS
-
-    assert len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]) == FEASolver.nComp
-
-    corresp = [-1 for index in range(FEASolver.nComp)]
-    ndv = 0;
-
-    # SKIN_IDS = FEASolver.selectCompIDs(include=SKINS)[0]
-    # for i in range(len(SKIN_IDS)):
-    #     dv_name = "SKIN_" + str(i)
-    #     FEASolver.addDVGroup(dv_name, include = SKIN_IDS[i])
-    #     ndv = ndv+1;
-    #     corresp[SKIN_IDS[i]] = ndv;
-
-    for i in range(len(SKINS)):
-        dv_name = SKINS[i]
-        FEASolver.addDVGroup(dv_name, include = SKINS[i])
-        ndv = ndv+1;
-        SKIN_IDS_I = FEASolver.selectCompIDs(include=SKINS[i])[0]
-        for k in range(len(SKIN_IDS_I)):
-            corresp[SKIN_IDS_I[k]] = ndv;
-
-    # JUNCTION_IDS = FEASolver.selectCompIDs(include=JUNCTIONS)[0]
-    # for i in range(len(JUNCTION_IDS)):
-    #     dv_name = "JUNCTION_" + str(i)
-    #     FEASolver.addDVGroup(dv_name, include = JUNCTION_IDS[i])
-    #     ndv = ndv+1;
-    #     corresp[JUNCTION_IDS[i]] = ndv;
-
-    for i in range(len(JUNCTIONS)):
-        dv_name = JUNCTIONS[i]
-        FEASolver.addDVGroup(dv_name, include = JUNCTIONS[i])
-        ndv = ndv+1;
-        JUNCTIONS_IDS_I = FEASolver.selectCompIDs(include=JUNCTIONS[i])[0]
-        for k in range(len(JUNCTIONS_IDS_I)):
-            corresp[JUNCTIONS_IDS_I[k]] = ndv;
-
-    for i in range(len(MEMBERS)):
-        dv_name = MEMBERS[i]
-        FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
-        ndv = ndv+1;
-        MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
-        for k in range(len(MEMBERS_IDS_I)):
-            corresp[MEMBERS_IDS_I[k]] = ndv;
-
-    return ndv, corresp
-
-    # ncoms = FEASolver.nComp
-    # for i in range(0,ncoms):
-    #     dv_name = 'stru_'+str(i)
-    #     FEASolver.addDVGroup(dv_name, include = i)
-
-
-def write_files(config, FEASolver, SP, corresp, load):
+def write_files(config, FEASolver, SP, corresp, load, print_tag):
 
     FEASolver.writeBDFForces(SP, "visualize_forces.bdf")
-    FEASolver.writeMeshDisplacements(SP, "struct_tacs.sol")
     FEASolver.writeSolution()
 
     x_final = numpy.zeros(FEASolver.getNumDesignVars())
     FEASolver.structure.getDesignVars(x_final)
 
+    x_final = numpy.loadtxt('x_final.dat')
+
     thickness_point = [0.0 for iPoint_bdf in range(load._nPoint_bdf)]
     thickness_point_count = [0 for iPoint_bdf in range(load._nPoint_bdf)]
 
+    current_tag = load._elem_tag_bdf[0]
     for iElem_bdf in range(load._nElem_bdf):
-        for iNode in range(load._nNode):
-            thickness_point[load._elem_bdf[iElem_bdf][iNode]-1] += x_final[corresp[load._elem_tag_bdf[iElem_bdf]-1]-1]
-            thickness_point_count[load._elem_bdf[iElem_bdf][iNode]-1] += 1
+        new_tag = load._elem_tag_bdf[iElem_bdf]
+        if new_tag == current_tag:
+            for iNode in range(load._nNode):
+                thickness_point[load._elem_bdf[iElem_bdf][iNode]-1] += x_final[corresp[load._elem_tag_bdf[iElem_bdf]-1]-1]
+                thickness_point_count[load._elem_bdf[iElem_bdf][iNode]-1] += 1
+        else:
+            for iNode in range(load._nNode):
+                thickness_point[load._elem_bdf[iElem_bdf][iNode]-1] = x_final[corresp[load._elem_tag_bdf[iElem_bdf]-1]-1]
+                thickness_point_count[load._elem_bdf[iElem_bdf][iNode]-1] = 1
+        current_tag = new_tag
+
     for iPoint_bdf in range(load._nPoint_bdf):
         thickness_point[iPoint_bdf] = thickness_point[iPoint_bdf]/thickness_point_count[iPoint_bdf]
 
-    write_sol_1('thicknesses.sol',thickness_point)
-    write_tecplot('thicknesses.dat',load._coord_bdf,load._elem_bdf,thickness_point)
+    thickness_elem = [0.0 for iElem_bdf in range(load._nElem_bdf)]
+    for iElem_bdf in range(load._nElem_bdf):
+        thickness_elem[iElem_bdf] = x_final[corresp[load._elem_tag_bdf[iElem_bdf]-1]-1]
 
-    dvs_file = 'x_final.dat'
-    dvs = open(dvs_file,'w')
-    for i in range(len(x_final)):
-        dvs.write('%f\n' % x_final[i])
-    dvs.close()
+    thickness_tag = [0.0 for iTag_bdf in range(max(load._elem_tag_bdf))]
+    for iTag_bdf in range(max(load._elem_tag_bdf)):
+        thickness_tag[iTag_bdf] = x_final[corresp[iTag_bdf]-1]
+
+    write_sol_1('struct_thickness.sol',thickness_point)
+    disp = FEASolver.writeMeshDisplacements(SP, "struct_disp.sol")
+    force = FEASolver.writeMeshForces(SP, "struct_force.sol")
+
+    write_tecplot('surface_struct.dat',load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,print_tag,force,disp,thickness_point)
+
+
+    thickness_file = open('thickness_final.dat','w')
+    for iTag_bdf in range(max(load._elem_tag_bdf)):
+        thickness_file.write('%f\n' % thickness_tag[iTag_bdf])
+    thickness_file.close()
+
+    dvs_file = open('x_final.dat','w')
+    for iDesVar in range(len(x_final)):
+        dvs_file.write('%f\n' % x_final[iDesVar])
+    dvs_file.close()
 
     load.postprocess(x_final, corresp)
 
@@ -691,23 +906,29 @@ def write_sol_3(sol_file,solution):
 
 #: def write_sol_3()
 
-def write_tecplot(sol_file,coord,elem,thickness):
+def write_tecplot(sol_file,coord,elem,elem_tag,print_tag,force,disp,thickness):
  
     nPoint = len(coord)
     nElem = len(elem)
 
+    nElem_print = 0
+    for iElem in range(nElem):
+        if elem_tag[iElem] in print_tag:
+            nElem_print += 1
+
     file = open(sol_file,'w')
     file.write('TITLE = "Visualization of the surface solution"\n')
-    file.write('VARIABLES = "x""y""z""thickness"\n')
-    file.write('ZONE NODES= %d, ELEMENTS= %d, DATAPACKING=POINT, ZONETYPE=FEQUADRILATERAL\n' % (nPoint, nElem))
+    file.write('VARIABLES = "x""y""z""f_x""f_y""f_z""d_x""d_y""d_z""thickness"\n')
+    file.write('ZONE NODES= %d, ELEMENTS= %d, DATAPACKING=POINT, ZONETYPE=FEQUADRILATERAL\n' % (nPoint, nElem_print))
     for iPoint in range(nPoint):
         file.write(str(coord[iPoint][0]) + " " + str(coord[iPoint][1]) + " " + str(coord[iPoint][2]) + " ")
-        # file.write(str(force[iPoint][0]) + " " + str(force[iPoint][1]) + " " + str(force[iPoint][2]) + " ")
-        # file.write(str(disp[iPoint][0]) + " " + str(disp[iPoint][1]) + " " + str(disp[iPoint][2]) + " ")
+        file.write(str(force[iPoint][0]) + " " + str(force[iPoint][1]) + " " + str(force[iPoint][2]) + " ")
+        file.write(str(disp[iPoint][0]) + " " + str(disp[iPoint][1]) + " " + str(disp[iPoint][2]) + " ")
         # file.write(str(rotation[iPoint][0]) + " " + str(rotation[iPoint][1]) + " " + str(rotation[iPoint][2]) + " ")
         file.write(str(thickness[iPoint]) + "\n")
     for iElem in range(nElem):
-        file.write(str(elem[iElem][0]) + " " + str(elem[iElem][1])  + " " + str(elem[iElem][2]) + " " + str(elem[iElem][2]) + "\n")
+        if elem_tag[iElem] in print_tag:
+            file.write(str(elem[iElem][0]) + " " + str(elem[iElem][1])  + " " + str(elem[iElem][2]) + " " + str(elem[iElem][3]) +  "\n")
     file.close()
 
 #: def write_tecplot()
@@ -724,6 +945,35 @@ def write_line(file,line,l=0,r=0):
             line = line + ' '
     file.write(line)
 
+def index_max_angle(coord_0,coord_1,coord_2,coord_3):
+
+    D01 = ( (coord_0[0]-coord_1[0])**2.0 + (coord_0[1]-coord_1[1])**2.0 + (coord_0[2]-coord_1[2])**2.0 )**0.5 # 01
+    D02 = ( (coord_0[0]-coord_2[0])**2.0 + (coord_0[1]-coord_2[1])**2.0 + (coord_0[2]-coord_2[2])**2.0 )**0.5 # 02
+    D03 = ( (coord_0[0]-coord_3[0])**2.0 + (coord_0[1]-coord_3[1])**2.0 + (coord_0[2]-coord_3[2])**2.0 )**0.5 # 03
+    D12 = ( (coord_1[0]-coord_2[0])**2.0 + (coord_1[1]-coord_2[1])**2.0 + (coord_1[2]-coord_2[2])**2.0 )**0.5 # 12
+    D13 = ( (coord_1[0]-coord_3[0])**2.0 + (coord_1[1]-coord_3[1])**2.0 + (coord_1[2]-coord_3[2])**2.0 )**0.5 # 13
+    D23 = ( (coord_2[0]-coord_3[0])**2.0 + (coord_2[1]-coord_3[1])**2.0 + (coord_2[2]-coord_3[2])**2.0 )**0.5 # 23
+    D10 = D01; D21 = D12; D31 = D13; D30 = D03; D32 = D23; D20 = D02
+
+    # angle 01 - 03
+    D1 = D01; D2 = D03; D3 = D13
+    angle_0 = numpy.arccos((D1**2.0 + D2**2.0 - D3**2.0) / (2.0 * D1 * D2))
+
+    # angle 12 - 10
+    D1 = D12; D2 = D10; D3 = D20
+    angle_1 = numpy.arccos((D1**2.0 + D2**2.0 - D3**2.0) / (2.0 * D1 * D2))
+
+    # angle 23 - 21
+    D1 = D23; D2 = D21; D3 = D31
+    angle_2 = numpy.arccos((D1**2.0 + D2**2.0 - D3**2.0) / (2.0 * D1 * D2))
+
+    # angle 30 - 32
+    D1 = D30; D2 = D32; D3 = D02
+    angle_3 = numpy.arccos((D1**2.0 + D2**2.0 - D3**2.0) / (2.0 * D1 * D2))
+
+    angles = [angle_0, angle_1, angle_2, angle_3]
+
+    return angles.index(max(angles))
 
 def isFloat(s):
     try: 
