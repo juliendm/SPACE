@@ -83,11 +83,11 @@ def structure(config):
     load.update(ini_half_mass_guess)
 
 
+    # Run
 
+    # computeNastran(config, load)
 
-    computeNastran(config, load)
-
-    # computeTacs(config, load)
+    computeTacs(config, load)
 
     # computeSimpleTacs()
 
@@ -140,7 +140,7 @@ def computeTacs(config, load):
 
     material_rho = float(config.MATERIAL_DENSITY)
     material_E = float(config.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(config.MATERIAL_YIELD_STRENGTH) / 2.7 #80e6 #80e6 ##################################
+    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.75 #2.7 #80e6 #80e6 ##################################
     material_nu = float(config.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
@@ -149,13 +149,13 @@ def computeTacs(config, load):
 
     tMin = 0.0016
 
-    tMax = 3.0
+    tMax = 0.05
     tMax_skin = 0.003
 
     KSWeight = 80.0
 
-    #evalFuncs = ['mass','ks0','mf0']
-    evalFuncs = ['mass','ks0','ks1','ks2','mf0']
+    #evalFuncs = ['mass','ks0','ks1','ks2']
+    evalFuncs = ['mass','ks0','ks1','ks2','ad0']
 
     SPs = [StructProblem('lc0', loadFactor=load._loadFactor*load._safetyFactor_inertial, loadFile=config.LOAD_FILENAME, evalFuncs=evalFuncs)]
     numLoadCases = len(SPs)
@@ -188,16 +188,15 @@ def computeTacs(config, load):
 
     # KS Functions
     #ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
-
     ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
     ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
     ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
-
     #ksef0 = FEASolver.addFunction('ksef0', functions.KSElementFailure, KSWeight=KSWeight)
     #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)
-    mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
-
-    #ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement)
+    
+    ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement, KSWeight=KSWeight, include=['MSPARW'])
+    
+    #mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
 
     # Load Factor
     FEASolver.setOption('gravityVector',load._gravity_vector.tolist())
@@ -269,12 +268,18 @@ def computeTacs(config, load):
 
         for j in xrange(3):
             con_name = '%s_ks%d'% (SPs[i].name, j)
-            optProb.addCon(con_name, lower=1.0, upper=1.0)
+            optProb.addCon(con_name, upper=1.0)
             history_file.write(',"%s"' % con_name)
+
         for j in xrange(1):
-            con_name = '%s_mf%d'% (SPs[i].name, j)
-            #optProb.addCon(con_name, lower=1.0, upper=1.0)
+            con_name = '%s_ad%d'% (SPs[i].name, j)
+            optProb.addCon(con_name, lower=0.0, upper=0.05) # no more than 3 cm disp
             history_file.write(',"%s"' % con_name)
+
+        # for j in xrange(1):
+        #     con_name = '%s_mf%d'% (SPs[i].name, j)
+        #     optProb.addCon(con_name, lower=1.0, upper=1.0)
+        #     history_file.write(',"%s"' % con_name)
 
     history_file.write('\n')
     history_file.close()
@@ -294,7 +299,7 @@ def computeTacs(config, load):
 
     # Solve
 
-    sol = opt(optProb, sens=sens) #NULL result without error in PyObject_Call
+    sol = opt(optProb, sens=sens)
 
     # Write Files
 
@@ -327,17 +332,19 @@ def addDVGroups(FEASolver):
     FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
         'MFRAME:10','MFRAME:11','MFRAME:12']
     LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
+
     RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
         'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
-        'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
-    SPARS = ['MSPARF:00','MSPARF:01', # 'MSPARF:02','MSPARF:03',
+        'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05'] # ,'MRIBW:06'
+    SPARS = ['MSPARF:00','MSPARF:01',
         'MSPARV:00','MSPARV:01','MSPARV:02',
-        'MSPARC:00','MSPARC:06',
-        'MSPARW:00','MSPARW:02','MSPARW:08'] # 'MSPARW:09'
-    STRINGERS = ['MSTRINGC:01','MSTRINGC:02','MSTRINGC:03','MSTRINGC:04','MSTRINGC:05',
-        'MSTRINGW:01','MSTRINGW:03','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07']
-    MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS + ['MSKINC:a','MSKINC:b']
+        'MSPARC:03','MSPARC:09', # 'MSPARC:06',
+        'MSPARW:00','MSPARW:03','MSPARW:09'] # 'MSPARW:06',
+    STRINGERS = ['MSTRINGC:04','MSTRINGC:05','MSTRINGC:06','MSTRINGC:07','MSTRINGC:08',
+        'MSTRINGW:01','MSTRINGW:02','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07','MSTRINGW:08']
+    SKIN_BOX = ['MSKINC:a:03','MSKINC:a:04','MSKINC:a:05','MSKINC:a:06','MSKINC:a:07','MSKINC:a:08','MSKINC:b:03','MSKINC:b:04','MSKINC:b:05','MSKINC:b:06','MSKINC:b:07','MSKINC:b:08',]
 
+    MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS + SKIN_BOX
     assert len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]) == FEASolver.nComp
 
     corresp = [-1 for index in range(FEASolver.nComp)]
@@ -836,8 +843,6 @@ def write_files(config, FEASolver, SP, corresp, load, print_tag):
     x_final = numpy.zeros(FEASolver.getNumDesignVars())
     FEASolver.structure.getDesignVars(x_final)
 
-    x_final = numpy.loadtxt('x_final.dat')
-
     thickness_point = [0.0 for iPoint_bdf in range(load._nPoint_bdf)]
     thickness_point_count = [0 for iPoint_bdf in range(load._nPoint_bdf)]
 
@@ -869,8 +874,8 @@ def write_files(config, FEASolver, SP, corresp, load, print_tag):
     disp = FEASolver.writeMeshDisplacements(SP, "struct_disp.sol")
     force = FEASolver.writeMeshForces(SP, "struct_force.sol")
 
-    write_tecplot('surface_struct.dat',load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,print_tag,force,disp,thickness_point)
-
+    write_tecplot('surface_struct_interior.dat',load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,print_tag,force,disp,thickness_point)
+    write_tecplot('surface_struct.dat',load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,load._elem_tag_bdf,force,disp,thickness_point)
 
     thickness_file = open('thickness_final.dat','w')
     for iTag_bdf in range(max(load._elem_tag_bdf)):
