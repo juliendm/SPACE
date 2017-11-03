@@ -13,7 +13,7 @@ import numpy as np
 
 class Load(object):
 
-    def __init__(self, config, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle = 0.0, fuel_percentage = 1.0, 
+    def __init__(self, config, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle = 0.0, fuel_percentage = 1.0, 
         safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
         self._nDim = 3
@@ -30,6 +30,7 @@ class Load(object):
         self._payload_frames  = [5,6,7,8,9,10,11,12] # [3,4,5,6,7]
 
         self._config = copy.deepcopy(config)
+        self._load_filename = load_filename
 
         self._loadFactor = loadFactor
         self._gravity_vector = gravity_vector
@@ -172,7 +173,7 @@ class Load(object):
                 self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
 
         # Write load
-        write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf,self._nNode)
+        write_load(self._load_filename,self._load_bdf,self._coord_bdf,self._elem_bdf,self._nNode)
 
         # Write Check
         write_check(self._load_bdf,self._coord_bdf,self._elem_bdf,self._normal_voronoi,self._nNode)

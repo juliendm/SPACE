@@ -42,7 +42,14 @@ def structure(config):
     safetyFactor_inertial = 1.0
     safetyFactor_non_inertial = 1.0
 
-    # Fixed by Trajectory
+    # Initial Guess
+
+    ini_half_mass_guess = 20000 # kg
+
+
+    loads = []
+
+    # LOAD CASE 1
 
     fuel_percentage = 0.8
     pdyn_inf = 12169.185366 # float(konfig.P_DYN_INF)
@@ -51,58 +58,57 @@ def structure(config):
     nz = -1.795355 # float(konfig.ACCELERATION_Z)
     half_thrust = 162844.38 # float(konfig.HALF_THRUST)
 
-
-    # fuel_percentage = 0.0
-    # pdyn_inf = 8458.985536
-    # nx = -0.919204
-    # ny = 0.0
-    # nz = -5.000117
-    # half_thrust = 0.0
-    # mach = 4.072702
-    # reynolds = 873499.095851
-    # aoa = 22.956569
-
-
-
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    loadAngle = numpy.arccos(-nz/loadFactor)*180.0/numpy.pi # Angle with vector [0,0,-1]
+    thrust_angle = 0.0 # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
+    gravity_vector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
 
 
-    # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
-    thrust_angle = 0.0
+    load_filename = 'load_1.dat'
+
+    spaceutil.surf2sol(konfig)
+    SPACE_INT(konfig)
+    load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    load.update(ini_half_mass_guess)
+
+    loads.append(load)
+
+
+    # LOAD CASE 2
+
+    fuel_percentage = 1.0
+    pdyn_inf = 8458.985536
+    nx = 5.0
+    ny = 0.0
+    nz = 0.0
+    half_thrust = 162844.38
+    mach = 4.072702
+    reynolds = 873499.095851
+    aoa = 22.956569
+
+    load_filename = 'load_2.dat'
+
+    spaceutil.surf2sol(konfig)
+    SPACE_INT(konfig)
+    load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    load.update(ini_half_mass_guess)
+
+    loads.append(load)
+
+
+    # Run
+
+    computeTacs(konfig, loads)
+
+
+
 
     # # Modify inputs
+    # loadAngle = numpy.arccos(-nz/loadFactor)*180.0/numpy.pi # Angle with vector [0,0,-1]
     # loadFactor = ...
     # loadAngle = 30.0 # 24.8482002334
     # nx = loadFactor*numpy.sin(loadAngle*numpy.pi/180.0)    
     # ny = 0.0
     # nz = -loadFactor*numpy.cos(loadAngle*numpy.pi/180.0)
-
-
-    # Gravity Vector
-    gravity_vector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
-
-
-    # Initial Guess
-
-    ini_half_mass_guess = 20000 # kg
-
-
-    # Compute initial Load
-
-    spaceutil.surf2sol(konfig)
-    SPACE_INT(konfig)
-    load = spaceutil.Load(konfig, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
-    load.update(ini_half_mass_guess)
-
-
-    # Run
-
-    # computeNastran(config, load)
-
-    computeTacs(config, load)
-
-    # computeSimpleTacs()
 
 
 
@@ -145,7 +151,7 @@ def structure(config):
 
 
 
-def computeTacs(config, load):
+def computeTacs(config, loads):
 
     gcomm = comm = MPI.COMM_WORLD
 
@@ -167,25 +173,29 @@ def computeTacs(config, load):
 
     KSWeight = 80.0
 
-    scale_ad = 1.0
-
     #evalFuncs = ['mass','ks0','ks1','ks2']
-    evalFuncs = ['mass','ks1','ks2','ks3','ad3']
+    evalFuncs = ['mass','ksf1','ksf2','ksf3']
     #evalFuncs = ['mass','ks1','ks2','ad0']
     #evalFuncs = ['mass','ad0']
 
-    SPs = [StructProblem('lc0', loadFactor=load._loadFactor*load._safetyFactor_inertial, loadFile=config.LOAD_FILENAME, evalFuncs=evalFuncs)]
-    numLoadCases = len(SPs)
+
+
+
 
     # Create Solver
-
     structOptions = {'transferSize':0.5, 'transferGaussOrder':3}
     FEASolver = pytacs.pyTACS(config.STRUCT + '.bdf', comm=comm, options=structOptions)
 
+    # Load Cases
+    SPs = []
+    numLoadCases = len(loads)
+
+    # Load File
+    for i in range(numLoadCases):
+        SPs.append(StructProblem('lc%d' % i, loadFactor=loads[i]._loadFactor*loads[i]._safetyFactor_inertial, loadFile=loads[i]._load_filename, evalFuncs=evalFuncs))
+
     # Add Design Variables
-
-    ndv, corresp, SKINS, JUNCTIONS, MEMBERS = addDVGroups(FEASolver, load)
-
+    ndv, corresp, SKINS, JUNCTIONS, MEMBERS = addDVGroups(FEASolver, loads[0])
     def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
         if 'SKIN' in userDescript:
             con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t_skin, dvNum, tMin, tMax_skin)
@@ -193,10 +203,13 @@ def computeTacs(config, load):
             con = constitutive.isoFSDTStiffness(material_rho, material_E, material_nu, kcorr, material_ys, t, dvNum, tMin, tMax)
         scale = [100.0]
         return con, scale
-
     FEASolver.createTACSAssembler(conCallBack)
-
     assert ndv == FEASolver.getNumDesignVars()
+
+    # Inertial Forces
+    for i in range(numLoadCases):
+        FEASolver.setOption('gravityVector',loads[i]._gravity_vector.tolist())
+        FEASolver.addInertialLoad(SPs[i])
 
     # Add Functions
 
@@ -204,74 +217,66 @@ def computeTacs(config, load):
     FEASolver.addFunction('mass', functions.StructuralMass)
 
     # Contraint Functions
+    if 'ksf0' in evalFuncs: ksf0 = FEASolver.addFunction('ksf0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
+    if 'ksf1' in evalFuncs: ksf1 = FEASolver.addFunction('ksf1', functions.AverageKSFailure, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
+    if 'ksf2' in evalFuncs: ksf2 = FEASolver.addFunction('ksf2', functions.AverageKSFailure, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
+    if 'ksf3' in evalFuncs: ksf3 = FEASolver.addFunction('ksf3', functions.AverageKSFailure, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
 
-    if 'ks0' in evalFuncs: ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
-    if 'ks1' in evalFuncs: ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
-    if 'ks2' in evalFuncs: ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
-    if 'ks3' in evalFuncs: ks3 = FEASolver.addFunction('ks3', functions.AverageKSFailure, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
+    if 'ksb0' in evalFuncs: ksb0 = FEASolver.addFunction('ksb0', functions.AverageKSBuckling, KSWeight=KSWeight, loadFactor=1.0)
+    if 'ksb1' in evalFuncs: ksb1 = FEASolver.addFunction('ksb1', functions.AverageKSBuckling, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
+    if 'ksb2' in evalFuncs: ksb2 = FEASolver.addFunction('ksb2', functions.AverageKSBuckling, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
+    if 'ksb3' in evalFuncs: ksb3 = FEASolver.addFunction('ksb3', functions.AverageKSBuckling, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
 
-    if 'ad0' in evalFuncs: ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement, KSWeight=300, loadFactor=1.0)
-    if 'ad1' in evalFuncs: ad1 = FEASolver.addFunction('ad1', functions.AggregateDisplacement, KSWeight=300, include=SKINS, loadFactor=1.0)
-    if 'ad2' in evalFuncs: ad2 = FEASolver.addFunction('ad2', functions.AggregateDisplacement, KSWeight=300, include=JUNCTIONS, loadFactor=1.0)
-    if 'ad3' in evalFuncs: ad3 = FEASolver.addFunction('ad3', functions.AggregateDisplacement, KSWeight=300, include=MEMBERS, loadFactor=1.0)
+    if 'ad0' in evalFuncs: ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement, KSWeight=100, loadFactor=1.0)
+    if 'ad1' in evalFuncs: ad1 = FEASolver.addFunction('ad1', functions.AggregateDisplacement, KSWeight=100, include=SKINS, loadFactor=1.0)
+    if 'ad2' in evalFuncs: ad2 = FEASolver.addFunction('ad2', functions.AggregateDisplacement, KSWeight=100, include=JUNCTIONS, loadFactor=1.0)
+    if 'ad3' in evalFuncs: ad3 = FEASolver.addFunction('ad3', functions.AggregateDisplacement, KSWeight=100, include=MEMBERS, loadFactor=1.0)
 
-    #ksef0 = FEASolver.addFunction('ksef0', functions.KSElementFailure, KSWeight=KSWeight)
-    #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)    
-    #mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
 
-    # Load Factor
-    FEASolver.setOption('gravityVector',load._gravity_vector.tolist())
-    for i in range(numLoadCases):
-        FEASolver.addInertialLoad(SPs[i])
 
     history_filename = 'history_structure.dat'
     history_iteration = {'val':0}
 
     # Process current state
-
     x_final = numpy.zeros(FEASolver.getNumDesignVars())
     FEASolver.structure.getDesignVars(x_final)
-    load.postprocess(x_final, corresp)
+    for i in range(numLoadCases):
+        loads[i].postprocess(x_final, corresp)
 
     # Objective
-
     def obj(x):
         '''Evaluate the objective and constraints'''
         funcs = {}
         FEASolver.setDesignVars(x)
 
         for i in range(numLoadCases):
-
             #############################################
             # load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
             # load.update(load._half_structure_mass+load._half_additional_mass)
             # SPs[i].loadFile = config.LOAD_FILENAME # Reset loadFile to read it again
             #############################################
-
             FEASolver(SPs[i])
             FEASolver.evalFunctions(SPs[i], funcs)
 
-            if comm.rank == 0:
-                history_file = open(history_filename,'a')
-                history_file.write('%d' % history_iteration['val'])
+        if comm.rank == 0:
+            history_file = open(history_filename,'a')
+            history_file.write('%d' % history_iteration['val'])
+            for i in range(numLoadCases):
                 for key in evalFuncs:
                     history_file.write(',%.16f' % funcs['%s_%s'% (SPs[i].name, key)])
-                history_file.write('\n')
-                history_file.close()
-                history_iteration['val'] += 1
+            history_file.write('\n')
+            history_file.close()
+            history_iteration['val'] += 1
 
-        #funcs['lc0_ad0'] *= scale_ad
         return funcs, False
 
     # Sensitivies
-
     def sens(x, funcs):
         '''Evaluate the objective and constraint sensitivities'''
         funcsSens = {}
         for i in range(numLoadCases):
             FEASolver.evalFunctionsSens(SPs[i], funcsSens)
 
-        #funcsSens['lc0_ad0']['struct'] *= scale_ad
         return funcsSens, False
 
 
@@ -282,29 +287,36 @@ def computeTacs(config, load):
     history_file = open(history_filename,'w')
     history_file.write('VARIABLES = "Iteration"')
 
+
     for i in range(numLoadCases):
 
         for name in evalFuncs:
 
-            if name is 'mass':
-                obj_name = '%s_%s'% (SPs[i].name, name)
-                optProb.addObj(obj_name)
+            if 'mass' in name:
+                obj_name = '%s_%s' % (SPs[i].name, name)
+                if obj_name == 'lc0_mass':
+                    optProb.addObj(obj_name)
                 history_file.write(',"%s"' % obj_name)
 
-            if 'ks' in name:
-                con_name = '%s_%s'% (SPs[i].name, name)
+            if 'ksf' in name:
+                con_name = '%s_%s' % (SPs[i].name, name)
+                optProb.addCon(con_name, upper=1.0)
+                history_file.write(',"%s"' % con_name)
+
+            if 'ksb' in name:
+                con_name = '%s_%s' % (SPs[i].name, name)
                 optProb.addCon(con_name, upper=1.0)
                 history_file.write(',"%s"' % con_name)
 
             if 'ad' in name:
-                con_name = '%s_%s'% (SPs[i].name, name)
-                optProb.addCon(con_name, upper=0.01*scale_ad) # no more than 3 cm disp
+                con_name = '%s_%s' % (SPs[i].name, name)
+                optProb.addCon(con_name, upper=0.03) # no more than 3 cm disp
                 history_file.write(',"%s"' % con_name)
 
     history_file.write('\n')
     history_file.close()
 
-    # Add Variables
+    # Add Variables to optProb
     FEASolver.addVariablesPyOpt(optProb)
 
 
@@ -446,7 +458,7 @@ def addDVGroups(FEASolver, load):
 def computeSimpleTacs():
 
     bdf_file = '../beam.bdf'
-    load_file = 'load_distribution.txt'
+    load_filename = 'load_distribution.txt'
 
     # Material properties
 
@@ -505,13 +517,13 @@ def computeSimpleTacs():
 
     # WRITE
 
-    load = open(load_file,"w")
-    load.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
+    load_file = open(load_filename,"w")
+    load_file.write(str(nPoint_bdf) + " " + str(nElem_bdf) + "\n")
     for iPoint_bdf in range(nPoint_bdf):
-        load.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
+        load_file.write(str(coord_bdf[iPoint_bdf][0]) + " " + str(coord_bdf[iPoint_bdf][1]) + " " + str(coord_bdf[iPoint_bdf][2]) + " " + str(load_bdf[iPoint_bdf][0]) + " " + str(load_bdf[iPoint_bdf][1]) + " " + str(load_bdf[iPoint_bdf][2]) + "\n")
     for iElem_bdf in range(nElem_bdf):
-        load.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
-    load.close()
+        load_file.write(str(elem_bdf[iElem_bdf][0]-1) + " " + str(elem_bdf[iElem_bdf][1]-1)  + " " + str(elem_bdf[iElem_bdf][2]-1) + " " + str(elem_bdf[iElem_bdf][3]-1) + "\n")
+    load_file.close()
 
     gcomm = comm = MPI.COMM_WORLD
 
@@ -521,7 +533,7 @@ def computeSimpleTacs():
     tMin = 0.0016
     tMax = 2.0*h
 
-    SPs = [StructProblem('lc0', loadFactor=load_factor, loadFile=load_file)]
+    SPs = [StructProblem('lc0', loadFactor=load_factor, loadFile=load_filename)]
     numLoadCases = len(SPs)
 
     # Create Solver
