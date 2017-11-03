@@ -233,7 +233,7 @@ def computeTacs(config, loads):
     if 'ad3' in evalFuncs: ad3 = FEASolver.addFunction('ad3', functions.AggregateDisplacement, KSWeight=100, include=MEMBERS, loadFactor=1.0)
 
 
-
+    # File output
     history_filename = 'history_structure.dat'
     history_iteration = {'val':0}
 
