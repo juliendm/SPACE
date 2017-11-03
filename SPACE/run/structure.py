@@ -51,6 +51,19 @@ def structure(config):
     nz = -1.795355 # float(konfig.ACCELERATION_Z)
     half_thrust = 162844.38 # float(konfig.HALF_THRUST)
 
+
+    # fuel_percentage = 0.0
+    # pdyn_inf = 8458.985536
+    # nx = -0.919204
+    # ny = 0.0
+    # nz = -5.000117
+    # half_thrust = 0.0
+    # mach = 4.072702
+    # reynolds = 873499.095851
+    # aoa = 22.956569
+
+
+
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
     loadAngle = numpy.arccos(-nz/loadFactor)*180.0/numpy.pi # Angle with vector [0,0,-1]
 
@@ -140,7 +153,7 @@ def computeTacs(config, load):
 
     material_rho = float(config.MATERIAL_DENSITY)
     material_E = float(config.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.75 #2.7 #80e6 #80e6 ##################################
+    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.3333 #2.7 #80e6 #80e6 ##################################
     material_nu = float(config.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
@@ -149,13 +162,17 @@ def computeTacs(config, load):
 
     tMin = 0.0016
 
-    tMax = 0.05
-    tMax_skin = 0.003
+    tMax = 0.1
+    tMax_skin = 0.05
 
     KSWeight = 80.0
 
+    scale_ad = 1.0
+
     #evalFuncs = ['mass','ks0','ks1','ks2']
-    evalFuncs = ['mass','ks0','ks1','ks2','ad0']
+    evalFuncs = ['mass','ks1','ks2','ks3','ad3']
+    #evalFuncs = ['mass','ks1','ks2','ad0']
+    #evalFuncs = ['mass','ad0']
 
     SPs = [StructProblem('lc0', loadFactor=load._loadFactor*load._safetyFactor_inertial, loadFile=config.LOAD_FILENAME, evalFuncs=evalFuncs)]
     numLoadCases = len(SPs)
@@ -167,7 +184,7 @@ def computeTacs(config, load):
 
     # Add Design Variables
 
-    ndv, corresp, SKINS, JUNCTIONS, MEMBERS = addDVGroups(FEASolver)
+    ndv, corresp, SKINS, JUNCTIONS, MEMBERS = addDVGroups(FEASolver, load)
 
     def conCallBack(dvNum, compDescripts, userDescript, specialDVs, **kargs):
         if 'SKIN' in userDescript:
@@ -186,16 +203,20 @@ def computeTacs(config, load):
     # Mass Functions
     FEASolver.addFunction('mass', functions.StructuralMass)
 
-    # KS Functions
-    #ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
-    ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
-    ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
-    ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
+    # Contraint Functions
+
+    if 'ks0' in evalFuncs: ks0 = FEASolver.addFunction('ks0', functions.AverageKSFailure, KSWeight=KSWeight, loadFactor=1.0)
+    if 'ks1' in evalFuncs: ks1 = FEASolver.addFunction('ks1', functions.AverageKSFailure, KSWeight=KSWeight, include=SKINS, loadFactor=1.0)
+    if 'ks2' in evalFuncs: ks2 = FEASolver.addFunction('ks2', functions.AverageKSFailure, KSWeight=KSWeight, include=JUNCTIONS, loadFactor=1.0)
+    if 'ks3' in evalFuncs: ks3 = FEASolver.addFunction('ks3', functions.AverageKSFailure, KSWeight=KSWeight, include=MEMBERS, loadFactor=1.0)
+
+    if 'ad0' in evalFuncs: ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement, KSWeight=300, loadFactor=1.0)
+    if 'ad1' in evalFuncs: ad1 = FEASolver.addFunction('ad1', functions.AggregateDisplacement, KSWeight=300, include=SKINS, loadFactor=1.0)
+    if 'ad2' in evalFuncs: ad2 = FEASolver.addFunction('ad2', functions.AggregateDisplacement, KSWeight=300, include=JUNCTIONS, loadFactor=1.0)
+    if 'ad3' in evalFuncs: ad3 = FEASolver.addFunction('ad3', functions.AggregateDisplacement, KSWeight=300, include=MEMBERS, loadFactor=1.0)
+
     #ksef0 = FEASolver.addFunction('ksef0', functions.KSElementFailure, KSWeight=KSWeight)
-    #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)
-    
-    ad0 = FEASolver.addFunction('ad0', functions.AggregateDisplacement, KSWeight=KSWeight, include=['MSPARW'])
-    
+    #ksf0 = FEASolver.addFunction('ksf0', functions.KSFailure, KSWeight=KSWeight)    
     #mf0 = FEASolver.addFunction('mf0', functions.AverageMaxFailure)
 
     # Load Factor
@@ -239,6 +260,7 @@ def computeTacs(config, load):
                 history_file.close()
                 history_iteration['val'] += 1
 
+        #funcs['lc0_ad0'] *= scale_ad
         return funcs, False
 
     # Sensitivies
@@ -248,6 +270,8 @@ def computeTacs(config, load):
         funcsSens = {}
         for i in range(numLoadCases):
             FEASolver.evalFunctionsSens(SPs[i], funcsSens)
+
+        #funcsSens['lc0_ad0']['struct'] *= scale_ad
         return funcsSens, False
 
 
@@ -260,29 +284,29 @@ def computeTacs(config, load):
 
     for i in range(numLoadCases):
 
-        obj_name = '%s_%s'% (SPs[i].name, 'mass')
-        optProb.addObj(obj_name)
-        history_file.write(',"%s"' % obj_name)
+        for name in evalFuncs:
 
-        FEASolver.addVariablesPyOpt(optProb)
+            if name is 'mass':
+                obj_name = '%s_%s'% (SPs[i].name, name)
+                optProb.addObj(obj_name)
+                history_file.write(',"%s"' % obj_name)
 
-        for j in xrange(3):
-            con_name = '%s_ks%d'% (SPs[i].name, j)
-            optProb.addCon(con_name, upper=1.0)
-            history_file.write(',"%s"' % con_name)
+            if 'ks' in name:
+                con_name = '%s_%s'% (SPs[i].name, name)
+                optProb.addCon(con_name, upper=1.0)
+                history_file.write(',"%s"' % con_name)
 
-        for j in xrange(1):
-            con_name = '%s_ad%d'% (SPs[i].name, j)
-            optProb.addCon(con_name, lower=0.0, upper=0.05) # no more than 3 cm disp
-            history_file.write(',"%s"' % con_name)
-
-        # for j in xrange(1):
-        #     con_name = '%s_mf%d'% (SPs[i].name, j)
-        #     optProb.addCon(con_name, lower=1.0, upper=1.0)
-        #     history_file.write(',"%s"' % con_name)
+            if 'ad' in name:
+                con_name = '%s_%s'% (SPs[i].name, name)
+                optProb.addCon(con_name, upper=0.01*scale_ad) # no more than 3 cm disp
+                history_file.write(',"%s"' % con_name)
 
     history_file.write('\n')
     history_file.close()
+
+    # Add Variables
+    FEASolver.addVariablesPyOpt(optProb)
+
 
     if comm.rank == 0:
         print optProb
@@ -293,7 +317,7 @@ def computeTacs(config, load):
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
         'Iterations limit':100000,
-        'Major iterations limit':1000,
+        'Major iterations limit':500,
         'Minor iterations limit':500,
         'Major step limit':2.0})
 
@@ -313,7 +337,7 @@ def computeTacs(config, load):
 
 #: def computeTacs()
 
-def addDVGroups(FEASolver):
+def addDVGroups(FEASolver, load):
 
     # SKIN
 
@@ -329,22 +353,39 @@ def addDVGroups(FEASolver):
 
     # MEMBERS
 
-    FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
-        'MFRAME:10','MFRAME:11','MFRAME:12']
-    LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
+    MEMBERS = []
+    for name in load._descriptions.keys():
+        parts = name.split(':')
+        if parts[0] in ['MFRAME','MRIBF','MRIBV','MRIBW','MSPARF','MSPARV','MSPARC','MSPARW','MSTRINGC','MSTRINGW']:
+            new_name = '%s:%s' % (parts[0],parts[1])
+            if new_name not in MEMBERS:
+                MEMBERS.append(new_name)
+        elif parts[0] in ['MLONG','MSKINC','MSKINC']:
+            new_name = '%s:%s:%s' % (parts[0],parts[1],parts[2])
+            if new_name not in MEMBERS:
+                MEMBERS.append(new_name)     
 
-    RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
-        'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
-        'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05'] # ,'MRIBW:06'
-    SPARS = ['MSPARF:00','MSPARF:01',
-        'MSPARV:00','MSPARV:01','MSPARV:02',
-        'MSPARC:03','MSPARC:09', # 'MSPARC:06',
-        'MSPARW:00','MSPARW:03','MSPARW:09'] # 'MSPARW:06',
-    STRINGERS = ['MSTRINGC:04','MSTRINGC:05','MSTRINGC:06','MSTRINGC:07','MSTRINGC:08',
-        'MSTRINGW:01','MSTRINGW:02','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07','MSTRINGW:08']
-    SKIN_BOX = ['MSKINC:a:03','MSKINC:a:04','MSKINC:a:05','MSKINC:a:06','MSKINC:a:07','MSKINC:a:08','MSKINC:b:03','MSKINC:b:04','MSKINC:b:05','MSKINC:b:06','MSKINC:b:07','MSKINC:b:08',]
+    # # MFRAME:xx
+    # FRAMES = ['MFRAME:00','MFRAME:01','MFRAME:02','MFRAME:03','MFRAME:04','MFRAME:05','MFRAME:06','MFRAME:07','MFRAME:08','MFRAME:09',
+    #     'MFRAME:10','MFRAME:11','MFRAME:12']
+    # # MLONG:xx:x
+    # LONGERONS = ['MLONG:02:2','MLONG:00:3','MLONG:01:3','MLONG:02:3','MLONG:00:4','MLONG:01:4']
+    # # MRIBF:xx MRIBV:xx MRIBW:xx
+    # RIBS = ['MRIBF:00','MRIBF:01','MRIBF:02','MRIBF:03','MRIBF:04','MRIBF:05','MRIBF:06','MRIBF:07',
+    #     'MRIBV:00','MRIBV:01','MRIBV:02','MRIBV:03','MRIBV:04','MRIBV:05','MRIBV:06','MRIBV:07','MRIBV:08','MRIBV:09',
+    #     'MRIBW:00','MRIBW:01','MRIBW:02','MRIBW:03','MRIBW:04','MRIBW:05']
+    # # MSPARF:xx MSPARV:xx MSPARC:xx MSPARW:xx
+    # SPARS = ['MSPARF:00','MSPARF:01',
+    #     'MSPARV:00','MSPARV:01','MSPARV:02',
+    #     'MSPARC:03','MSPARC:09',
+    #     'MSPARW:00','MSPARW:03','MSPARW:09']
+    # # MSTRINGC:xx MSTRINGW:xx
+    # STRINGERS = ['MSTRINGC:04','MSTRINGC:05','MSTRINGC:06','MSTRINGC:07','MSTRINGC:08',
+    #     'MSTRINGW:01','MSTRINGW:02','MSTRINGW:04','MSTRINGW:05','MSTRINGW:06','MSTRINGW:07','MSTRINGW:08']
+    # # MSKINC:a:xx MSKINC:b:xx
+    # SKIN_BOX = ['MSKINC:a:03','MSKINC:a:04','MSKINC:a:05','MSKINC:a:06','MSKINC:a:07','MSKINC:a:08','MSKINC:b:03','MSKINC:b:04','MSKINC:b:05','MSKINC:b:06','MSKINC:b:07','MSKINC:b:08',]
+    # MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS + SKIN_BOX
 
-    MEMBERS = FRAMES + LONGERONS + RIBS + SPARS + STRINGERS + SKIN_BOX
     assert len(FEASolver.selectCompIDs(include=SKINS+JUNCTIONS+MEMBERS)[0]) == FEASolver.nComp
 
     corresp = [-1 for index in range(FEASolver.nComp)]

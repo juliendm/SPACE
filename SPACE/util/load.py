@@ -19,15 +19,15 @@ class Load(object):
         self._nDim = 3
         self._nNode = 4
 
-        self._nFrame = 13
+        self._nFrame = 20 # 13
         self._nLongeron = 4
 
-        self._thrust_frames   = [10]
-        self._avionics_frames = [0,1]
-        self._lox_frames      = [7,10]
-        self._kero_frames     = [1,3]
-        self._engine_frames   = [10,11,16]
-        self._payload_frames  = [3,4,5,6,7]
+        self._thrust_frames   = [16] # [10]
+        self._avionics_frames = [0,1,2] # [0,1]
+        self._lox_frames      = [12,15] # [7,10]
+        self._kero_frames     = [2,5] # [1,3]
+        self._engine_frames   = [15,16,17,18] # [10,11,16]
+        self._payload_frames  = [5,6,7,8,9,10,11,12] # [3,4,5,6,7]
 
         self._config = copy.deepcopy(config)
 

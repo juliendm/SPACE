@@ -325,20 +325,34 @@ class Spaceplane(PGMconfiguration):
             for j in range(jdims.shape[0]-1):
                 afm.addVertFlip('MSPARF:%02d:%02d' % (i,j),'flap',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
 
-        idims = np.linspace(0,1,4) # 4
         jdims = np.linspace(0,1,20) # 13
+
+        idims = np.linspace(0,1,5)
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]):
                 afm.addVert('MFRAME:%02d:1:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[0,2])
-                afm.addVert('MFRAME:%02d:2:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[1,3])
                 afm.addVert('MFRAME:%02d:3:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[2,0])
-                afm.addVert('MFRAME:%02d:4:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[3,1])
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]-1):
                 afm.addVert('MLONG:%02d:1:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[0,2])
-                afm.addVert('MLONG:%02d:2:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[1,3])
                 afm.addVert('MLONG:%02d:3:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[2,0])
+
+        idims = np.linspace(0,1,6)
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]):
+                afm.addVert('MFRAME:%02d:2:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[1,3])
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]-1):
+                afm.addVert('MLONG:%02d:2:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[1,3])
+
+        idims = np.linspace(0,1,10)
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]):
+                afm.addVert('MFRAME:%02d:4:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[3,1])
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]-1):
                 afm.addVert('MLONG:%02d:4:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[3,1])
+
 
         afm.preview('preview')
         afm.mesh()
