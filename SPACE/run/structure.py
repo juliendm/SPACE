@@ -33,9 +33,6 @@ from SPACE.run.interface import INT       as SPACE_INT
 
 def structure(config):
 
-    # local copy
-    konfig = copy.deepcopy(config)
-
     # Safety Factors
 
     safetyFactor_thrust = 1.0
@@ -47,16 +44,21 @@ def structure(config):
     ini_half_mass_guess = 20000 # kg
 
 
+
     loads = []
 
     # LOAD CASE 1
 
-    fuel_percentage = 0.8
-    pdyn_inf = 12169.185366 # float(konfig.P_DYN_INF)
-    nx = 0.831404 # float(konfig.ACCELERATION_X)
-    ny = 0.0 # float(konfig.ACCELERATION_Y)
-    nz = -1.795355 # float(konfig.ACCELERATION_Z)
-    half_thrust = 162844.38 # float(konfig.HALF_THRUST)
+    # MACH_NUMBER= 0.9
+    # REYNOLDS_NUMBER= 6800000.0
+    # AoA= 14.0
+
+    fuel_percentage = (35500.0 - 13250.0) / (36800.0 - 13250.0)
+    pdyn_inf = 13415.473225                                           # float(konfig.P_DYN_INF)
+    nx = 0.806527                                                     # float(konfig.ACCELERATION_X)
+    ny = 0.0                                                          # float(konfig.ACCELERATION_Y)
+    nz = -1.804901                                                    # float(konfig.ACCELERATION_Z)
+    half_thrust = 338617.115272/2.0                                   # float(konfig.HALF_THRUST)
 
     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
     thrust_angle = 0.0 # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
@@ -65,6 +67,8 @@ def structure(config):
 
     load_filename = 'load_1.dat'
 
+    konfig = copy.deepcopy(config)
+    konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_001'
     spaceutil.surf2sol(konfig)
     SPACE_INT(konfig)
     load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
@@ -75,18 +79,46 @@ def structure(config):
 
     # LOAD CASE 2
 
-    fuel_percentage = 1.0
-    pdyn_inf = 8458.985536
-    nx = 5.0
+    # MACH_NUMBER= 8.0
+    # REYNOLDS_NUMBER= 500.0
+    # AoA= 2.5
+
+    fuel_percentage = (13350.0 - 13250.0) / (36800.0 - 13250.0)
+    pdyn_inf = 6.123247
+    nx = 3.080521
     ny = 0.0
-    nz = 0.0
-    half_thrust = 162844.38
-    mach = 4.072702
-    reynolds = 873499.095851
-    aoa = 22.956569
+    nz = 0.000654
+    half_thrust = 399999.667471/2.0  
 
     load_filename = 'load_2.dat'
 
+    konfig = copy.deepcopy(config)
+    konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_002'
+    spaceutil.surf2sol(konfig)
+    SPACE_INT(konfig)
+    load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    load.update(ini_half_mass_guess)
+
+    loads.append(load)
+
+
+    # LOAD CASE 3
+
+    # MACH_NUMBER= 3.9
+    # REYNOLDS_NUMBER= 900000.0
+    # AoA= 22.5
+
+    fuel_percentage = 0.0
+    pdyn_inf = 8458.985536
+    nx = -0.919204
+    ny = 0.0
+    nz = -5.000117
+    half_thrust = 0.0 
+
+    load_filename = 'load_3.dat'
+
+    konfig = copy.deepcopy(config)
+    konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_003'
     spaceutil.surf2sol(konfig)
     SPACE_INT(konfig)
     load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
@@ -97,7 +129,7 @@ def structure(config):
 
     # Run
 
-    computeTacs(konfig, loads)
+    computeTacs(config, loads)
 
 
 
@@ -159,7 +191,7 @@ def computeTacs(config, loads):
 
     material_rho = float(config.MATERIAL_DENSITY)
     material_E = float(config.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.3333 #2.7 #80e6 #80e6 ##################################
+    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.25 #0.3333 #2.7 #80e6 #80e6 ##################################
     material_nu = float(config.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
@@ -174,7 +206,10 @@ def computeTacs(config, loads):
     KSWeight = 80.0
 
     #evalFuncs = ['mass','ks0','ks1','ks2']
+    evalFuncs = ['mass','ksf1','ksf2','ksf3','ad3']
     evalFuncs = ['mass','ksf1','ksf2','ksf3']
+
+
     #evalFuncs = ['mass','ks1','ks2','ad0']
     #evalFuncs = ['mass','ad0']
 
@@ -249,12 +284,21 @@ def computeTacs(config, loads):
         funcs = {}
         FEASolver.setDesignVars(x)
 
+        ################################################################################
+        max_half_wet_mass = 0.0
         for i in range(numLoadCases):
-            #############################################
-            # load.postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
-            # load.update(load._half_structure_mass+load._half_additional_mass)
-            # SPs[i].loadFile = config.LOAD_FILENAME # Reset loadFile to read it again
-            #############################################
+            loads[i].postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
+            half_wet_mass = loads[i]._half_structure_mass                                  \
+                          + loads[i]._half_additional_mass                                 \
+                          + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_lox   \
+                          + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_kero  # Add consumed fuel
+            if (half_wet_mass > max_half_wet_mass): max_half_wet_mass = half_wet_mass
+        for i in range(numLoadCases):
+            loads[i].update(max_half_wet_mass)        # max_half_wet_mass supposed to be the same for all cases
+            SPs[i].loadFile = loads[i]._load_filename # Reset loadFile to read it again
+        ################################################################################
+
+        for i in range(numLoadCases):
             FEASolver(SPs[i])
             FEASolver.evalFunctions(SPs[i], funcs)
 
@@ -310,7 +354,7 @@ def computeTacs(config, loads):
 
             if 'ad' in name:
                 con_name = '%s_%s' % (SPs[i].name, name)
-                optProb.addCon(con_name, upper=0.03) # no more than 3 cm disp
+                optProb.addCon(con_name, upper=0.035) # no more than 3 cm disp
                 history_file.write(',"%s"' % con_name)
 
     history_file.write('\n')
@@ -329,7 +373,7 @@ def computeTacs(config, loads):
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
         'Iterations limit':100000,
-        'Major iterations limit':500,
+        'Major iterations limit':1000,
         'Minor iterations limit':500,
         'Major step limit':2.0})
 
@@ -341,11 +385,12 @@ def computeTacs(config, loads):
 
     print_tag = []
     for key_in in JUNCTIONS + MEMBERS:
-        for key_desc in load._descriptions:
+        for key_desc in loads[0]._descriptions:
             if key_in.upper() in key_desc:
-                print_tag.append(load._descriptions[key_desc])
+                print_tag.append(loads[0]._descriptions[key_desc])
 
-    write_files(config, FEASolver, SPs[0], corresp, load, print_tag)
+    for i in range(numLoadCases):
+        write_files(FEASolver, SPs[i], corresp, loads[i], print_tag)
 
 #: def computeTacs()
 
@@ -405,6 +450,7 @@ def addDVGroups(FEASolver, load):
 
     group_skin = False
     group_junction = True
+    group_member = True
 
     if group_skin:
         for i in range(len(SKINS)):
@@ -438,13 +484,21 @@ def addDVGroups(FEASolver, load):
             ndv = ndv+1;
             corresp[JUNCTION_IDS[i]] = ndv;
 
-    for i in range(len(MEMBERS)):
-        dv_name = "MEMBER_" + str(i) # MEMBERS[i]
-        FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
-        ndv = ndv+1;
-        MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
-        for k in range(len(MEMBERS_IDS_I)):
-            corresp[MEMBERS_IDS_I[k]] = ndv;
+    if group_member:
+        for i in range(len(MEMBERS)):
+            dv_name = "MEMBER_" + str(i) # MEMBERS[i]
+            FEASolver.addDVGroup(dv_name, include = MEMBERS[i])
+            ndv = ndv+1;
+            MEMBERS_IDS_I = FEASolver.selectCompIDs(include=MEMBERS[i])[0]
+            for k in range(len(MEMBERS_IDS_I)):
+                corresp[MEMBERS_IDS_I[k]] = ndv;
+    else:
+        MEMBER_IDS = FEASolver.selectCompIDs(include=MEMBERS)[0]
+        for i in range(len(MEMBER_IDS)):
+            dv_name = "MEMBER_" + str(i)
+            FEASolver.addDVGroup(dv_name, include = MEMBER_IDS[i])
+            ndv = ndv+1;
+            corresp[MEMBER_IDS[i]] = ndv;
 
     return ndv, corresp, SKINS, JUNCTIONS, MEMBERS
 
@@ -888,9 +942,9 @@ def computeNastran(config, load):
 
 
 
-def write_files(config, FEASolver, SP, corresp, load, print_tag):
+def write_files(FEASolver, SP, corresp, load, print_tag):
 
-    FEASolver.writeBDFForces(SP, "visualize_forces.bdf")
+    FEASolver.writeBDFForces(SP, '%s_visualize_forces.bdf' % SP.name)
     FEASolver.writeSolution()
 
     x_final = numpy.zeros(FEASolver.getNumDesignVars())
@@ -923,19 +977,19 @@ def write_files(config, FEASolver, SP, corresp, load, print_tag):
     for iTag_bdf in range(max(load._elem_tag_bdf)):
         thickness_tag[iTag_bdf] = x_final[corresp[iTag_bdf]-1]
 
-    write_sol_1('struct_thickness.sol',thickness_point)
-    disp = FEASolver.writeMeshDisplacements(SP, "struct_disp.sol")
-    force = FEASolver.writeMeshForces(SP, "struct_force.sol")
+    write_sol_1('%s_struct_thickness.sol' % SP.name,thickness_point)
+    disp = FEASolver.writeMeshDisplacements(SP, '%s_struct_disp.sol' % SP.name)
+    force = FEASolver.writeMeshForces(SP, '%s_struct_force.sol' % SP.name)
 
-    write_tecplot('surface_struct_interior.dat',load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,print_tag,force,disp,thickness_point)
-    write_tecplot('surface_struct.dat',load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,load._elem_tag_bdf,force,disp,thickness_point)
+    write_tecplot('%s_surface_struct_interior.dat' % SP.name,load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,print_tag,force,disp,thickness_point)
+    write_tecplot('%s_surface_struct.dat' % SP.name,load._coord_bdf,load._elem_bdf,load._elem_tag_bdf,load._elem_tag_bdf,force,disp,thickness_point)
 
-    thickness_file = open('thickness_final.dat','w')
+    thickness_file = open('%s_thickness_final.dat' % SP.name,'w')
     for iTag_bdf in range(max(load._elem_tag_bdf)):
         thickness_file.write('%f\n' % thickness_tag[iTag_bdf])
     thickness_file.close()
 
-    dvs_file = open('x_final.dat','w')
+    dvs_file = open('%s_x_final.dat' % SP.name,'w')
     for iDesVar in range(len(x_final)):
         dvs_file.write('%f\n' % x_final[iDesVar])
     dvs_file.close()
