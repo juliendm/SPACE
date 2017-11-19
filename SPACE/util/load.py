@@ -13,23 +13,24 @@ import numpy as np
 
 class Load(object):
 
-    def __init__(self, config, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle = 0.0, fuel_percentage = 1.0, 
+    def __init__(self, config, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle = 0.0, fuel_percentage = 1.0, 
         safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
         self._nDim = 3
         self._nNode = 4
 
-        self._nFrame = 13
+        self._nFrame = 20 # 13
         self._nLongeron = 4
 
-        self._thrust_frames   = [10]
-        self._avionics_frames = [0,1]
-        self._lox_frames      = [7,10]
-        self._kero_frames     = [1,3]
-        self._engine_frames   = [10,11,16]
-        self._payload_frames  = [3,4,5,6,7]
+        self._thrust_frames   = [16] # [10]
+        self._avionics_frames = [0,1,2] # [0,1]
+        self._lox_frames      = [12,15] # [7,10]
+        self._kero_frames     = [2,5] # [1,3]
+        self._engine_frames   = [15,16,17,18] # [10,11,16]
+        self._payload_frames  = [5,6,7,8,9,10,11,12] # [3,4,5,6,7]
 
         self._config = copy.deepcopy(config)
+        self._load_filename = load_filename
 
         self._loadFactor = loadFactor
         self._gravity_vector = gravity_vector
@@ -50,6 +51,8 @@ class Load(object):
         self._half_mass_payload = float(self._config.HALF_PAYLOAD_MASS)
         self._half_mass_fuel_kero = float(self._config.HALF_KERO_MASS)
         self._half_mass_fuel_lox = float(self._config.HALF_LOX_MASS)
+        self._half_max_thrust_newtons = float(self._config.HALF_MAX_THRUST)
+        self._traj_max_pdyn_inf = float(self._config.TRAJ_MAX_PDYN_INF)
 
         # Read Meshes
 
@@ -172,10 +175,10 @@ class Load(object):
                 self._load_bdf[iPoint_bdf][iDim] += self._additional_mass_bdf[iPoint_bdf]*self._gravity_vector[iDim]*self._loadFactor*self._safetyFactor_inertial
 
         # Write load
-        write_load(self._config.LOAD_FILENAME,self._load_bdf,self._coord_bdf,self._elem_bdf,self._nNode)
+        write_load(self._load_filename,self._load_bdf,self._coord_bdf,self._elem_bdf,self._nNode)
 
-        # Write Check
-        write_check(self._load_bdf,self._coord_bdf,self._elem_bdf,self._normal_voronoi,self._nNode)
+        # # Write Check
+        # write_check(self._load_bdf,self._coord_bdf,self._elem_bdf,self._normal_voronoi,self._nNode)
 
     #: def load()
 
@@ -254,12 +257,23 @@ class Load(object):
 
         # Options 2 and 3 give the same pitch for 2 different cog but same forces distribution ...
 
-        postpro_file = 'postpro.dat'
+        postpro_file = 'postpro_' + self._load_filename
         postpro = open(postpro_file,'w')
 
         postpro.write('Half Structural Mass: %f\n' % self._half_structure_mass)
         postpro.write('Half Additional Mass: %f\n' % self._half_additional_mass)
-        postpro.write('Half Mass           : %f\n' % (self._half_structure_mass+self._half_additional_mass))
+        postpro.write('Half Wet Mass       : %f\n' % (self._half_structure_mass   \
+                                                     + self._half_additional_mass \
+                                                     + (1.0-self._fuel_percentage)*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)))
+        postpro.write('Half Dry Mass       : %f\n' % ( self._half_structure_mass  \
+                                                     + self._half_additional_mass \
+                                                     - self._half_mass_payload    \
+                                                     - self._fuel_percentage*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)))
+        postpro.write('\n')
+
+        postpro.write('Half Mass: Gear, Hydraulic, Avionics, Elec, Equip, Tank Lox, Tank Kero, Engine, TPS\n')
+        postpro.write('%f, %f, %f, %f, %f, %f, %f, %f, %f\n' % (self._half_mass_gear,self._half_mass_hydraulic,self._half_mass_avionics,self._half_mass_elec,self._half_mass_equip,self._half_mass_tank_lox,self._half_mass_tank_kero,self._half_mass_engine,self._half_mass_tps))
+
         postpro.write('\n')
 
         postpro.write('Center of Mass    : %f,%f\n' % (self._center_of_mass[0],self._center_of_mass[2]))
@@ -302,6 +316,7 @@ class Load(object):
         self._additional_mass_bdf = [0.0 for iPoint_bdf in range(len(self._coord_bdf))]
 
         surface_equip = get_apply_surface(self._apply_equip, self._area_voronoi)
+        self._half_mass_tps = 0.0
 
         for iPoint_bdf in range(len(self._coord_bdf)):
 
@@ -377,8 +392,10 @@ class Load(object):
                 # generally, the HRSI tiles are thicker at the forward areas of the orbiter and thinner toward the aft end
 
                 density_tps = 144.166 # kg/m^3
-                thickness_tps = 0.0762 # m
-                self._additional_mass_bdf[iPoint_bdf] += self._area_voronoi[iPoint_bdf]*thickness_tps*density_tps
+                thickness_tps = 0.01 # 0.0762 # m # USE MUCH THINNER TPS AS ONLY SUBORBITAL
+                local_mass_tps = self._area_voronoi[iPoint_bdf]*thickness_tps*density_tps
+                self._additional_mass_bdf[iPoint_bdf] += local_mass_tps
+                self._half_mass_tps += local_mass_tps
 
             # Payload
 
@@ -396,7 +413,7 @@ class Load(object):
         meters_to_feet = 3.28084
 
         weight_pounds_current_step = 2.0*half_mass_kg_current_step*kg_to_pounds
-        thrust_pounds = 2.0*self._half_thrust_newtons*newtons_to_pounds
+        max_thrust_pounds = 2.0*self._half_max_thrust_newtons*newtons_to_pounds
 
         body_length_feet = self._body_length*meters_to_feet
         wing_span_feet = self._wing_span*meters_to_feet
@@ -423,6 +440,10 @@ class Load(object):
         sts_tank_empty_mass = 26500.0 # kg
         tank_mass_per_area = sts_tank_empty_mass/sts_tank_area # kg/m2
 
+
+        tank_mass_per_area *= 0.6 # COMPOSITE REDUCE MASS BY 40 %
+        technology_improvement = 0.2 # KEEP ONLY 20 % OF MASS
+
         # Landing Gear Weight
 
         weight_gear = 0.00916*weight_pounds_current_step**1.124
@@ -430,23 +451,23 @@ class Load(object):
 
         # Hydraulic Weight
 
-        weight_hydraulic = 2.64 * ( ( (wing_body_elevon_surface_square_feet + body_flap_surface_square_feet + vertical_tail_surface_square_feet)*self._pdyn_inf/1000.0)**0.334 * (body_length_feet + wing_span_feet)**0.5 )
+        weight_hydraulic = 2.64 * ( ( (wing_body_elevon_surface_square_feet + body_flap_surface_square_feet + vertical_tail_surface_square_feet)*self._traj_max_pdyn_inf/1000.0)**0.334 * (body_length_feet + wing_span_feet)**0.5 )
         self._half_mass_hydraulic = weight_hydraulic*0.5*pounds_to_kg
 
         # Avionics Weight
 
         weight_avionics = 66.37*weight_pounds_current_step**0.361
-        self._half_mass_avionics = weight_avionics*0.5*pounds_to_kg
+        self._half_mass_avionics = weight_avionics*0.5*pounds_to_kg * technology_improvement
 
         # Electrical System Weight
 
         weight_elec = 1.167*weight_pounds_current_step**0.5*body_length_feet**0.25
-        self._half_mass_elec = weight_elec*0.5*pounds_to_kg
+        self._half_mass_elec = weight_elec*0.5*pounds_to_kg * technology_improvement
 
         # Equipment Weight
 
         weight_equip = 1000.0 + 0.01*weight_pounds_current_step ############## Maybe reduce fixed value
-        self._half_mass_equip = weight_equip*0.5*pounds_to_kg
+        self._half_mass_equip = weight_equip*0.5*pounds_to_kg * technology_improvement
 
         # Tank LOX Weight
 
@@ -468,7 +489,7 @@ class Load(object):
 
         # Engine Weight
 
-        weight_engine = 0.00766*thrust_pounds + 0.00033*thrust_pounds*rocket_expansion_ratio**0.5 + 130.0*N_engines
+        weight_engine = 0.00766*max_thrust_pounds + 0.00033*max_thrust_pounds*rocket_expansion_ratio**0.5 + 130.0*N_engines
         self._half_mass_engine = weight_engine*0.5*pounds_to_kg
 
 

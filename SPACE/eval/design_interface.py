@@ -33,6 +33,8 @@ def eval_design(func_name, config):
     design_filename = 'design.pkl'
     if os.path.exists(design_filename):
         design = spaceio.load_data(design_filename)
+        design.config = config
+        save_data(design.filename,design)
     else:
         design = init_design(config)
         save_data(design.filename,design)

@@ -34,10 +34,6 @@ def geometry ( config ):
     # Run Solution
     pgm = Spaceplane()
 
-    wing_width_section_1_ini = 1.54
-    wing_width_section_2_ini = 2.41
-    (pgm.wing_width_section_1, pgm.wing_width_section_2) = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF))
-    
     pgm.dv5 = float(konfig.DV5)
     pgm.dv6 = float(konfig.DV6)
     pgm.body_flap_deflection = float(konfig.BODY_FLAP_DEF)
@@ -46,9 +42,16 @@ def geometry ( config ):
 
     pgm.structure = False
     pgm.tail = False
+
+    wing_width_section_1_ini = 1.54
+    wing_width_section_2_ini = 2.41
+    pgm.wing_width_section_1, pgm.wing_width_section_2 = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),
+        float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF),'fluid')
+
     bse = pgm.initialize()
-    pgm.comps['lwing'].set_airfoil('profile_1.dat')
-    pgm.comps['rwing'].set_airfoil('profile_37.dat')
+
+    pgm.comps['lwing'].set_airfoil('profile_fluid_1.dat')
+    pgm.comps['rwing'].set_airfoil('profile_fluid_37.dat')
     pgm.comps['flap'].set_airfoil('profile_cs.dat')
     pgm.compute_all()
     # pgm.compute_normals()
@@ -65,9 +68,16 @@ def geometry ( config ):
 
         pgm.structure = True
         pgm.tail = True
+
+        wing_width_section_1_ini = 1.54
+        wing_width_section_2_ini = 2.41
+        pgm.wing_width_section_1, pgm.wing_width_section_2 = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),
+            float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF),'struct')
+
         bse = pgm.initialize()
-        pgm.comps['lwing'].set_airfoil('profile_1.dat')
-        pgm.comps['rwing'].set_airfoil('profile_37.dat')
+
+        pgm.comps['lwing'].set_airfoil('profile_struct_1.dat')
+        pgm.comps['rwing'].set_airfoil('profile_struct_37.dat')
         pgm.comps['flap'].set_airfoil('profile_cs.dat')
         pgm.compute_all()
 
@@ -93,9 +103,16 @@ class Spaceplane(PGMconfiguration):
             this.fuse_num_x = 14
 
         this.comps['fuse'] = PGMbody(num_x=this.fuse_num_x, num_y=4, num_z=8) #num_x is the number of surfacees
-        this.comps['lwing'] = PGMwing(num_x=9, num_z=12, left_closed=True)
-        this.comps['rwing'] = PGMwing(num_x=9, num_z=12, right_closed=True)
+
+        if this.structure:
+            this.comps['lwing'] = PGMwing(num_x=11, num_z=12, left_closed=True)
+            this.comps['rwing'] = PGMwing(num_x=11, num_z=12, right_closed=True)
+        else:
+            this.comps['lwing'] = PGMwing(num_x=9, num_z=12, left_closed=True)
+            this.comps['rwing'] = PGMwing(num_x=9, num_z=12, right_closed=True)
+
         if this.tail: this.comps['ctail'] = PGMwing(num_x=3, num_z=4, left_closed=True)
+
         this.comps['flap'] = PGMwing(num_x=6, num_z=4, left_closed=True)
 
         this.comps['fuse_f'] = PGMcone(this, 'fuse', 'front', 7.0)
@@ -108,10 +125,11 @@ class Spaceplane(PGMconfiguration):
         #this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'bot', 'E', [0,1], 'lwing', 'right')
         if this.structure:
             this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,2], 'lwing', 'right')
+            this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,1], 'rwing', 'left')
         else:
             this.comps['lwing_fuse'] = PGMjunction(this, 'fuse', 'lft', 'E', [3,1], 'lwing', 'right')
+            this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,2], 'rwing', 'left')
 
-        #this.comps['rwing_fuse'] = PGMjunction(this, 'fuse', 'rgt', 'W', [3,2], 'rwing', 'left')
         if this.tail: this.comps['ctail_fuse'] = PGMjunction(this, 'fuse', 'top', 'E', [3,this.fuse_num_x-5], 'ctail', 'right')
 
         this.comps['flap_fuse'] = PGMjunction(this, 'fuse', 'bot', 'S', [this.fuse_num_x-2,0], 'flap', 'right')
@@ -236,10 +254,7 @@ class Spaceplane(PGMconfiguration):
         comps['fuse'].faces['bot'].set_option('num_pt', 'u', [5,5,5,5,5,5,5,5], both=False)
         comps['fuse'].faces['lft'].set_option('num_pt', 'u', [6,6,6,8], both=False)
 
-        #comps['lwing'].faces['upp'].set_option('num_pt', 'v', [3,3,3,4,4,4,5,5,5,5,5,5], both=False)
         comps['lwing'].faces['upp'].set_option('num_pt', 'v', [4,4,4,4,4,4,5,5,5,5,5,5], both=False)
-
-        # comps['rwing'].faces['upp'].set_option('num_pt', 'v', [5,5,5,5,5,5,5,5,5,5,5,5], both=False)
 
         comps['flap'].faces['upp'].set_option('num_pt', 'v', [6,6,6,6], both=False)
 
@@ -247,46 +262,52 @@ class Spaceplane(PGMconfiguration):
     def meshStructure(this, filename):
         afm = Airframe(this, 1)
 
-        rear_spar = 2
+        
+        middle_spar = 11
 
-        idims = np.array([ 0.08  ,  0.1825,  0.285 ,  0.3875,  0.49  ,  0.5925,  0.695 ,0.7975,  0.9   ]) # np.linspace(0.08,0.9,9) #13
-        angle_location = 0.7 #this.wing_width_section_1/this.wing_width_section_2 + 0.05 #########
-        jdims = np.append(np.linspace(0,angle_location,3)[0:-1],np.linspace(angle_location,1,4)) #13
+        hinge_spar = 5
+        hinge_location = 0.22 # 0.285
+        #idims = np.array([ 0.08, 0.15, 0.22, hinge_location, 0.3875,  0.49, 0.5925, 0.695, 0.7975, 0.9])
+        # idims = np.linspace(0.08,0.9,9) #13
+        idims = np.append(np.linspace(0.08,hinge_location,5)[0:-1],np.linspace(hinge_location,0.9,14))
+
+        
+        angle_rib = 3
+        angle_location = 0.55 #20.0/37.0 #this.wing_width_section_1/this.wing_width_section_2 # + 0.05 #########
+        jdims = np.array([0.0, 0.18333333, angle_location, 0.7, 0.85, 1.0])
+        # jdims = np.append(np.linspace(0,angle_location,4)[0:-1],np.linspace(angle_location,1,4)) #13
 
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]):
+                if i < hinge_spar and j < 1: continue
                 afm.addVertFlip('MRIBW:%02d:l:%02d' % (j,i),'lwing',[idims[i],jdims[j]],[idims[i+1],jdims[j]])
                 afm.addVertFlip('MRIBW:%02d:r:%02d' % (j,i),'rwing',[idims[i],1-jdims[j]],[idims[i+1],1-jdims[j]])
         for i in range(idims.shape[0]):
             for j in range(jdims.shape[0]-1):
-                if i in [0, rear_spar, idims.shape[0]-1]: #, idims.shape[0]-3, idims.shape[0]-5]:
+                if i < hinge_spar and j < 1: continue
+                if i in [0, hinge_spar, idims.shape[0]-1]: # middle_spar, 
                     afm.addVertFlip('MSPARW:%02d:l:%02d' % (i,j),'lwing',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
                     afm.addVertFlip('MSPARW:%02d:r:%02d' % (i,j),'rwing',[idims[i],1-jdims[j]],[idims[i],1-jdims[j+1]])
                 else:
+                    if i in [6,8,10,12,14,16] and j >= angle_rib - 1: continue
                     afm.addVertFlip('MSTRINGW:%02d:a:l:%02d' % (i,j),'lwing',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1,0.85])
                     afm.addVertFlip('MSTRINGW:%02d:b:l:%02d' % (i,j),'lwing',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[0.15,0])
                     afm.addVertFlip('MSTRINGW:%02d:a:r:%02d' % (i,j),'rwing',[idims[i],1-jdims[j]],[idims[i],1-jdims[j+1]],w=[1,0.85])
                     afm.addVertFlip('MSTRINGW:%02d:b:r:%02d' % (i,j),'rwing',[idims[i],1-jdims[j]],[idims[i],1-jdims[j+1]],w=[0.15,0])
-        # idims_sec1 = np.array([idims[1], idims[rear_spar]]) #np.linspace(0.05,rear_spar,4)
-        # for j in range(idims_sec1.shape[0]-1):
-        #     afm.addVertFlip('MSPARW:%02d:l:%02d' % (idims.shape[0],j),'lwing',[idims_sec1[j],jdims[j]],[idims_sec1[j+1],jdims[j+1]])
-        #     afm.addVertFlip('MSPARW:%02d:r:%02d' % (idims.shape[0],j),'rwing',[idims_sec1[j],1-jdims[j]],[idims_sec1[j+1],1-jdims[j+1]])
 
-        idims = idims[2:9]
-        for i in range(idims.shape[0]):
-            if i is 0 or i is idims.shape[0]-1:
+        for i in range(hinge_spar,idims.shape[0]):
+            if i in [hinge_spar, idims.shape[0]-1]:
                 afm.addCtrVert('MSPARC:%02d' % (i),'lwing','rwing',idims[i])
             else:
                 afm.addCtrVert('MSTRINGC:%02d:a' % (i),'lwing','rwing',idims[i],w=[1,0.85])
                 afm.addCtrVert('MSTRINGC:%02d:b' % (i),'lwing','rwing',idims[i],w=[0.15,0])
-        for i in range(idims.shape[0]-1):
+        for i in range(hinge_spar,idims.shape[0]-1):
             afm.addCtr('MSKINC:a:%02d' % (i),'lwing','rwing',0,[idims[i],idims[i+1]])
-        for i in range(idims.shape[0]-1):
+        for i in range(hinge_spar,idims.shape[0]-1):
             afm.addCtr('MSKINC:b:%02d' % (i),'lwing','rwing',1,[1-idims[i],1-idims[i+1]])
-        #afm.addCtrVert('MSPARC:%02d' % (idims.shape[0]),'lwing','rwing',0.9)
 
         if this.tail:
-            idims = np.array([0.2,0.4,0.8])
+            idims = np.array([0.2,0.4,0.6,0.8])
             jdims = np.linspace(0.0,0.95,10)
             for i in range(idims.shape[0]-1):
                 for j in range(jdims.shape[0]):
@@ -304,26 +325,40 @@ class Spaceplane(PGMconfiguration):
             for j in range(jdims.shape[0]-1):
                 afm.addVertFlip('MSPARF:%02d:%02d' % (i,j),'flap',[idims[i],jdims[j]],[idims[i],jdims[j+1]])
 
-        idims = np.linspace(0,1,4) #6
-        jdims = np.linspace(0,1,13) # 25
+        jdims = np.linspace(0,1,20) # 13
+
+        idims = np.linspace(0,1,5)
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]):
                 afm.addVert('MFRAME:%02d:1:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[0,2])
-                afm.addVert('MFRAME:%02d:2:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[1,3])
                 afm.addVert('MFRAME:%02d:3:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[2,0])
-                afm.addVert('MFRAME:%02d:4:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[3,1])
         for i in range(idims.shape[0]-1):
             for j in range(jdims.shape[0]-1):
                 afm.addVert('MLONG:%02d:1:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[0,2])
-                afm.addVert('MLONG:%02d:2:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[1,3])
                 afm.addVert('MLONG:%02d:3:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[2,0])
+
+        idims = np.linspace(0,1,6)
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]):
+                afm.addVert('MFRAME:%02d:2:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[1,3])
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]-1):
+                afm.addVert('MLONG:%02d:2:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[1,3])
+
+        idims = np.linspace(0,1,10)
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]):
+                afm.addVert('MFRAME:%02d:4:%02d' % (j,i),'fuse',[idims[i],jdims[j]],[idims[i+1],jdims[j]],w=[1.0,0.96],i=[3,1])
+        for i in range(idims.shape[0]-1):
+            for j in range(jdims.shape[0]-1):
                 afm.addVert('MLONG:%02d:4:%02d' % (i,j),'fuse',[idims[i],jdims[j]],[idims[i],jdims[j+1]],w=[1.0,0.96],i=[3,1])
+
 
         afm.preview('preview')
         afm.mesh()
         afm.computeMesh(filename)
 
-def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_width_section_2_ini, deflection):
+def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_width_section_2_ini, deflection, case = 'fluid'):
 
     n_profiles_0 = 4    
     n_profiles_1 = 16
@@ -334,7 +369,7 @@ def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_wid
     x_hinge = 10.5 * scale_ini + dv4 # 9.78 * scale_ini # 
     y_hinge = -0.3
 
-    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/edge_1.dat')
+    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/%s/edge_1.dat' % case)
     x_u_root = profile[0:65,0] * scale_ini
     x_l_root = profile[65:130,0] * scale_ini
     y_u_root = profile[0:65,1]
@@ -345,19 +380,19 @@ def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_wid
     x_l_edge = np.zeros((3,65))
     y_l_edge = np.zeros((3,65))
 
-    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/edge_3.dat')
+    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/%s/edge_3.dat' % case)
     x_u_edge[0,:] = profile[0:65,0] * scale_ini
     x_l_edge[0,:] = profile[65:130,0] * scale_ini
     y_u_edge[0,:] = profile[0:65,1]
     y_l_edge[0,:] = profile[65:130,1]
 
-    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/edge_23.dat')
+    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/%s/edge_23.dat' % case)
     x_u_edge[1,:] = profile[0:65,0] * scale_ini
     x_l_edge[1,:] = profile[65:130,0] * scale_ini
     y_u_edge[1,:] = profile[0:65,1]
     y_l_edge[1,:] = profile[65:130,1]
 
-    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/edge_45.dat')
+    profile = np.loadtxt(SPACE_RUN + '/SPACE/util/profiles/%s/edge_45.dat' % case)
     x_u_edge[2,:] = profile[0:65,0] * scale_ini
     x_l_edge[2,:] = profile[65:130,0] * scale_ini
     y_u_edge[2,:] = profile[0:65,1]
@@ -524,7 +559,7 @@ def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_wid
         else:
             f_u = interpolate.interp1d(x_u_edge[n,:],y_u_edge[n,:])
             points_to_remove = []
-            for m in range(filter_k[n]+1,len(x_l_edge[n,:])-1): #can't remove last one
+            for m in range(filter_k[n]+1,len(x_l_edge[n,:])-1): # can't remove last one
                 if (y_l_edge[n,m] > filter_a[n]*x_l_edge[n,m]+filter_b[n]):
                     points_to_remove.append(m)
             f_l = interpolate.interp1d(np.delete(x_l_edge[n,:],points_to_remove,None),np.delete(y_l_edge[n,:],points_to_remove,None))
@@ -618,15 +653,13 @@ def compute_wing_profiles(dv1, dv2, dv3, dv4, wing_width_section_1_ini, wing_wid
     # Writing files
 
     for n in range(n_profiles):
-        out_file = 'profile_' + str(n+1) + '.dat' #'/ADL/juliendm/OML/GEOMACH/src/GeoMACH/PGM/airfoils/profile_' + str(n+1) + '.dat'
-        #out_file_python = '/ADL/juliendm/UTILS/python2.7/lib/python2.7/site-packages/GeoMACH-0.1-py2.7-linux-x86_64.egg/GeoMACH/PGM/airfoils/profile_' + str(n+1) + '.dat'
+        out_file = 'profile_%s_%d.dat' % (case,(n+1))
         out = open(out_file,"w")
         for k in range(len(x_u[n,:])):
             out.write(str(x_u[n,len(x_u[n,:])-1-k]) + ' ' + str(y_u[n,len(x_u[n,:])-1-k]) + '\n')
         for k in range(1,len(x_l[n,:])):
             out.write(str(x_l[n,k]) + ' ' + str(y_l[n,k]) + '\n')
         out.close()
-        #shutil.copy(out_file, out_file_python)
 
     shutil.copy(SPACE_RUN + '/SPACE/util/profiles/profile_cs.dat', 'profile_cs.dat')
 

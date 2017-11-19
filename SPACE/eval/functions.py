@@ -266,7 +266,7 @@ def structure(config, state=None):
     #  Aerodynamics Solution
     # ----------------------------------------------------    
 
-    aerodynamics(config,state)
+    ### aerodynamics(config,state)
 
     # ----------------------------------------------------    
     #  Structure Solution
