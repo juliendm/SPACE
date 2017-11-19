@@ -271,6 +271,11 @@ class Load(object):
                                                      - self._fuel_percentage*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)))
         postpro.write('\n')
 
+        postpro.write('Half Mass: Gear, Hydraulic, Avionics, Elec, Equip, Tank Lox, Tank Kero, Engine, TPS\n')
+        postpro.write('%f, %f, %f, %f, %f, %f, %f, %f, %f\n' % (self._half_mass_gear,self._half_mass_hydraulic,self._half_mass_avionics,self._half_mass_elec,self._half_mass_equip,self._half_mass_tank_lox,self._half_mass_tank_kero,self._half_mass_engine,self._half_mass_tps))
+
+        postpro.write('\n')
+
         postpro.write('Center of Mass    : %f,%f\n' % (self._center_of_mass[0],self._center_of_mass[2]))
         postpro.write('Center of Pressure: %f,%f\n' % (self._center_of_pressure[0],self._center_of_pressure[2]))
         postpro.write('Distance CoG-CoP x: %f\n'    % (np.sqrt((self._center_of_mass[0]-self._center_of_pressure[0])**2.0)))
@@ -311,6 +316,7 @@ class Load(object):
         self._additional_mass_bdf = [0.0 for iPoint_bdf in range(len(self._coord_bdf))]
 
         surface_equip = get_apply_surface(self._apply_equip, self._area_voronoi)
+        self._half_mass_tps = 0.0
 
         for iPoint_bdf in range(len(self._coord_bdf)):
 
@@ -386,8 +392,10 @@ class Load(object):
                 # generally, the HRSI tiles are thicker at the forward areas of the orbiter and thinner toward the aft end
 
                 density_tps = 144.166 # kg/m^3
-                thickness_tps = 0.0762 # m
-                self._additional_mass_bdf[iPoint_bdf] += self._area_voronoi[iPoint_bdf]*thickness_tps*density_tps
+                thickness_tps = 0.01 # 0.0762 # m # USE MUCH THINNER TPS AS ONLY SUBORBITAL
+                local_mass_tps = self._area_voronoi[iPoint_bdf]*thickness_tps*density_tps
+                self._additional_mass_bdf[iPoint_bdf] += local_mass_tps
+                self._half_mass_tps += local_mass_tps
 
             # Payload
 
@@ -432,6 +440,10 @@ class Load(object):
         sts_tank_empty_mass = 26500.0 # kg
         tank_mass_per_area = sts_tank_empty_mass/sts_tank_area # kg/m2
 
+
+        tank_mass_per_area *= 0.6 # COMPOSITE REDUCE MASS BY 40 %
+        technology_improvement = 0.2 # KEEP ONLY 20 % OF MASS
+
         # Landing Gear Weight
 
         weight_gear = 0.00916*weight_pounds_current_step**1.124
@@ -445,17 +457,17 @@ class Load(object):
         # Avionics Weight
 
         weight_avionics = 66.37*weight_pounds_current_step**0.361
-        self._half_mass_avionics = weight_avionics*0.5*pounds_to_kg
+        self._half_mass_avionics = weight_avionics*0.5*pounds_to_kg * technology_improvement
 
         # Electrical System Weight
 
         weight_elec = 1.167*weight_pounds_current_step**0.5*body_length_feet**0.25
-        self._half_mass_elec = weight_elec*0.5*pounds_to_kg
+        self._half_mass_elec = weight_elec*0.5*pounds_to_kg * technology_improvement
 
         # Equipment Weight
 
         weight_equip = 1000.0 + 0.01*weight_pounds_current_step ############## Maybe reduce fixed value
-        self._half_mass_equip = weight_equip*0.5*pounds_to_kg
+        self._half_mass_equip = weight_equip*0.5*pounds_to_kg * technology_improvement
 
         # Tank LOX Weight
 

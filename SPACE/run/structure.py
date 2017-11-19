@@ -191,7 +191,7 @@ def computeTacs(config, loads):
 
     material_rho = float(config.MATERIAL_DENSITY)
     material_E = float(config.MATERIAL_YOUNG_MODULUS)
-    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.25 #0.3333 #2.7 #80e6 #80e6 ##################################
+    material_ys = float(config.MATERIAL_YIELD_STRENGTH) * 0.25 #2.7 #80e6 #80e6 ##################################
     material_nu = float(config.MATERIAL_POISSON_RATIO)
     kcorr = 5.0/6.0
 
