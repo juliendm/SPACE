@@ -175,6 +175,18 @@ class AeroModel(object):
 
         return new_dvs
 
+    def raw_trim(self, dvs, ref_origin_x = None, ref_origin_z = None):
+
+        new_dvs = copy.copy(dvs)
+
+        def trim_function(x):
+            self.deflections_update(new_dvs,x[0])
+            return self.moment_y(new_dvs,ref_origin_x,ref_origin_z)
+
+        x0 = sp.optimize.fsolve(trim_function, 0.0)
+
+        return x0
+
     def deflections_update(self, dvs, x):
 
         if x < self.desvar.bf_bound[0]:
