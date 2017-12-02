@@ -100,26 +100,31 @@ class Surfpack(object):
 
         assert XB.shape[0] == self.ndim, 'wrong dimension'
         
-        obj = self.objective
-        prob = pyOpt.Optimization('Variance Maximization',obj)
+        X_min = [0.0]*len(XB)
+        X_min[0] = XB[0][0]-1.0
+
+        while not is_in(X_min,XB):
+
+            obj = self.objective
+            prob = pyOpt.Optimization('Variance Maximization',obj)
+                    
+            for ix in range(XB.shape[0]):
+                prob.addVar('X%i'%ix,'c',lower=XB[ix,0],upper=XB[ix,1],value=0.)
                 
-        for ix in range(XB.shape[0]):
-            prob.addVar('X%i'%ix,'c',lower=XB[ix,0],upper=XB[ix,1],value=0.)
-            
-        prob.addObj('Estimated Variance')
+            prob.addObj('Estimated Variance')
 
-        opt = pyOpt.ALPSO(pll_type=None)
-        #opt = pyOpt.ALPSO(pll_type='MP',args=[1.0])
-        opt.setOption('fileout',0)
-        opt.setOption('maxOuterIter',10)
-        opt.setOption('stopCriteria',1)       
-        opt.setOption('SwarmSize',self.ndim*100)
-        opt(prob)
+            opt = pyOpt.ALPSO(pll_type=None)
+            #opt = pyOpt.ALPSO(pll_type='MP',args=[1.0])
+            opt.setOption('fileout',0)
+            opt.setOption('maxOuterIter',10)
+            opt.setOption('stopCriteria',1)       
+            opt.setOption('SwarmSize',self.ndim*100)
+            opt(prob)
 
-        opt = pyOpt.SLSQP()
-        opt.setOption('IPRINT',-1)
-        opt.setOption('ACC',1e-5)
-        [YI_min,X_min,Info] = opt(prob.solution(0),sens_type='FD')
+            opt = pyOpt.SLSQP()
+            opt.setOption('IPRINT',-1)
+            opt.setOption('ACC',1e-5)
+            [YI_min,X_min,Info] = opt(prob.solution(0),sens_type='FD')
 
         return X_min
 
@@ -130,3 +135,12 @@ class Surfpack(object):
         fail = 0
         return F,G,fail 
 
+
+def is_in(X,XB):
+
+    eps = 1e-6
+
+    for index,val in enumerate(X):
+        if (val < XB[index][0]-eps) or (val > XB[index][1]+eps):
+            return False
+    return True

@@ -69,7 +69,7 @@ def response_surface( filename          ,
     XB = np.array([
         [0.3,  8.0],       # dv_mach
         [-1.0, 1.0],       # dv_rey
-        [-1.0, 3.0],       # dv_aoa            # CHEAT UPPER BOUND AOA
+        [-1.0, 1.0],       # dv_aoa            # CHEAT UPPER BOUND AOA
 
         [-0.5, 0.5],       # dv_geo1
         [-0.5, 0.5],       # dv_geo2
@@ -77,13 +77,14 @@ def response_surface( filename          ,
         [-0.2, 0.5],       # dv_geo4
     ])
 
+
     ndim = 7
 
-    flag = 'TRIM_AFT'
+    flag = 'K_ALPHA_FWD'
 
     if initiate:
 
-        nd = 10*ndim
+        nd = 400 #10*ndim
 
         X = LHC_unif(XB,nd)
 
@@ -91,10 +92,13 @@ def response_surface( filename          ,
 
         for index in range(len(X)):
 
+            print X[index]
+
             perfo_dvs = X[index]
             aero_dvs = perfo_to_aero(perfo_dvs)
             val = eval_function(flag,aero,aero_dvs)
-            model.add(perfo_dvs,val)
+            if abs(val) < max_admissible(flag):
+                model.add(perfo_dvs,val)
 
         model.save_data(os.path.join(project_folder,'build_points_' + flag + '.dat'))
 
@@ -117,9 +121,10 @@ def response_surface( filename          ,
             print 'dvs: ', perfo_dvs
             aero_dvs = perfo_to_aero(perfo_dvs)
             val = eval_function(flag,aero,aero_dvs)
-            model.add(perfo_dvs,val)
 
-            model.save_data(os.path.join(project_folder,'enriched_points_' + flag + '.dat'))
+            if abs(val) < max_admissible(flag):
+                model.add(perfo_dvs,val)
+                model.save_data(os.path.join(project_folder,'enriched_points_' + flag + '.dat'))
 
         # Save Model
 
@@ -146,16 +151,39 @@ def eval_function(flag,aero,aero_dvs):
         val = aero.static_margin(trimmed_dvs,cog_x_aft,cog_z)
     elif (flag == 'K_ALPHA_FWD'):
         trimmed_dvs = aero.trim(aero_dvs,cog_x_fwd,cog_z)
-        val = aero.k_alpha(trimmed_dvs,cog_x_fwd,cog_z)
+        if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
+            val = aero.k_alpha(trimmed_dvs,cog_x_fwd,cog_z)
+        else:
+            val = 10000
     elif (flag == 'K_ALPHA_AFT'):
         trimmed_dvs = aero.trim(aero_dvs,cog_x_aft,cog_z)
-        val = aero.k_alpha(trimmed_dvs,cog_x_aft,cog_z)
+        if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
+            val = aero.k_alpha(trimmed_dvs,cog_x_aft,cog_z)
+        else:
+            val = 10000
 
     return val
 
 def perfo_to_aero(dvs):
 
     return [dvs[0],dvs[1],dvs[2], 0.0,0.0, dvs[3],dvs[4],dvs[5],dvs[6], 0.5,0.5]
+
+def max_admissible(flag):
+
+    if flag == 'TRIM_FWD':
+        val = 1e6
+    elif flag == 'TRIM_AFT':
+        val = 1e6
+    elif (flag == 'TRIMMED_STATIC_MARGIN_FWD'):
+        val = 1e6
+    elif (flag == 'TRIMMED_STATIC_MARGIN_AFT'):
+        val = 1e6
+    elif (flag == 'K_ALPHA_FWD'):
+        val = 30
+    elif (flag == 'K_ALPHA_AFT'):
+        val = 30
+
+    return val
 
 # -------------------------------------------------------------------
 #  Run Main Program

@@ -102,27 +102,41 @@ def load_models( filename         ,
     model_trimmed_static_margin_fwd = Surfpack('TRIMMED_STATIC_MARGIN_FWD',ndim)
     model_trimmed_static_margin_fwd.load_model(os.path.join(project_folder,'model_TRIMMED_STATIC_MARGIN_FWD.sps'))
 
-    for flag in ['TRIM']: # ['TRIMMED_STATIC_MARGIN']: # 
+    model_k_alpha_aft = Surfpack('K_ALPHA_AFT',ndim)
+    model_k_alpha_aft.load_model(os.path.join(project_folder,'model_K_ALPHA_AFT.sps'))
+    model_k_alpha_fwd = Surfpack('K_ALPHA_FWD',ndim)
+    model_k_alpha_fwd.load_model(os.path.join(project_folder,'model_K_ALPHA_FWD.sps'))
+
+    for flag in ['K_ALPHA']: # ['TRIM','TRIMMED_STATIC_MARGIN']: # 
 
         for shift in [0.0]:
 
 
-            # # Small
+            # Small
+            dv1 = 0.5 + shift    # Leading Edge Location
+            dv2 = -0.5           # Elevon Length
+            dv3 = -0.5           # Span
+            dv4 = -0.2 + shift   # Hinge Location
+            dv5 = 0.5
+            dv6 = 0.5
+
+
+            # # Elevon
             # dv1 = 0.5 + shift    # Leading Edge Location
+            # dv2 = 0.5           # Elevon Length
+            # dv3 = -0.5           # Span
+            # dv4 = 0.5 + shift   # Hinge Location
+            # dv5 = 0.5
+            # dv6 = 0.5
+
+            # # # OPTIM
+            # dv1 = -0.5 + shift    # Leading Edge Location
             # dv2 = -0.5           # Elevon Length
             # dv3 = -0.5           # Span
             # dv4 = -0.2 + shift   # Hinge Location
             # dv5 = 0.5
             # dv6 = 0.5
 
-
-            # # Elevon
-            dv1 = 0.5 + shift    # Leading Edge Location
-            dv2 = 0.5           # Elevon Length
-            dv3 = -0.5           # Span
-            dv4 = 0.5 + shift   # Hinge Location
-            dv5 = 0.5
-            dv6 = 0.5
 
             fig = plt.figure()
 
@@ -175,7 +189,10 @@ def load_models( filename         ,
 
                         elif (flag == 'K_ALPHA'):
 
-                            COEFF[ix,iy] = 0.0
+                            if index == 0:
+                                COEFF[ix,iy] = model_k_alpha_fwd.eval(perfo_dvs)
+                            else:
+                                COEFF[ix,iy] = model_k_alpha_aft.eval(perfo_dvs)
 
                         elif (flag == 'EFFICIENCY'):
 
