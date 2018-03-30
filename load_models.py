@@ -88,11 +88,46 @@ def load_models( filename         ,
 
     # Plot
 
+    change_var = False
+
     surface = False
+    case = 'CASE_1'
+    compute_COEFF = False
+
+    curves = True
+
+    if change_var:
+
+        fig = plt.figure()
+        plt.xlabel('Mach', fontsize=18)
+        plt.ylabel('AoA [Deg]', fontsize=18)
+        plt.xlim([0,9])
+        plt.ylim([0,55])
+        plt.fill_between([0,1,8], [15,15,55], [55,55,55], color='grey', alpha='0.3', lw=0, zorder=3)
+        plt.fill_between([1,8,8,9], [0,0,0,0], [0,15,55,55], color='grey', alpha='0.3', lw=0, zorder=3)
+        fig.savefig(os.path.join(project_folder,'fig_change_var_aoa.png'))
+        plt.close(fig)
+
+        fig = plt.figure()
+        plt.xlabel('Mach', fontsize=18)
+        plt.ylabel('Reynolds', fontsize=18)
+        plt.xlim([0,9])
+        fill_mach = np.linspace(0,9,100)
+        fill_reynolds = 10.0**(-3.0/8.0*fill_mach+7.0+1.0)
+        max_y = max(fill_reynolds)
+        plt.fill_between(fill_mach, fill_reynolds, np.max(fill_reynolds)*np.ones(len(fill_reynolds)), color='grey', alpha='0.3', zorder=3)
+        fill_reynolds = 10.0**(-3.0/8.0*fill_mach+7.0-1.0)
+        min_y = min(fill_reynolds)
+        plt.fill_between(fill_mach, np.min(fill_reynolds)*np.ones(len(fill_reynolds)), fill_reynolds, color='grey', alpha='0.3', zorder=3)
+        plt.ylim([min_y,max_y])
+        plt.yscale('log')
+        fig.savefig(os.path.join(project_folder,'fig_change_var_reynolds.png'))
+        plt.close(fig)
+
 
     if surface:
 
-        nx = 100
+        nx = 50
 
         mach_range = [ 0.0, 9.0]
         aoa_range  = [ 0.0,55.0]
@@ -100,15 +135,27 @@ def load_models( filename         ,
         cogs = [0.60*17, 0.63*17]
         cog_z = -0.3
 
-        for flag in ['K_ALPHA','TRIMMED_STATIC_MARGIN','TRIM']:
+        for flag in ['K_ALPHA','TRIM']:
 
             for shift in [0.0]:
 
-                dv1 = 0.5 + shift    # Leading Edge Location
-                dv2 = 0.5           # Elevon Length
-                dv3 = -0.5           # Span
+                if case == 'CASE_1':
 
-                dv4 = 0.5 + shift   # Hinge Location
+                    dv1 = 0.5 + shift   # Leading Edge Location
+                    dv2 = -0.5          # Elevon Length
+                    dv3 = -0.5          # Span
+                    dv4 = -0.2 + shift  # Hinge Location
+
+                elif case == 'CASE_3':
+
+                    dv1 = 0.5 + shift   # Leading Edge Location
+                    dv2 = 0.48          # Elevon Length
+                    dv3 = -0.5          # Span
+                    dv4 = 0.39 + shift  # Hinge Location
+
+                else:
+
+                    dv1 = 0.0; dv2 = 0.0; dv3 = 0.0; dv4 = 0.0
 
                 dv5 = 0.5
                 dv6 = 0.5
@@ -131,52 +178,61 @@ def load_models( filename         ,
                     MACH, AOA = np.meshgrid(MACH, AOA)
                     COEFF = MACH*0.0
 
-                    for ix in range(nx):
-                        for iy in range(nx):
+                    if compute_COEFF:
 
-                            print cog_x, ix, iy
+                        for ix in range(nx):
+                            for iy in range(nx):
 
-                            dvs = aero.desvar.reverse_variable_change([MACH[ix,iy],1E7,AOA[ix,iy], 0.0,0.0, dv1,dv2,dv3,dv4, dv5,dv6])  ##### MUST DO BETTER for Reynolds... Must be the one from trajectory!!! FOR REYNOLDS
-                            dvs[aero.desvar.rey_index] = 0.0 # Force Reynolds to Reference Trajectory
+                                print cog_x, ix, iy
 
-    #                        if (dvs[aero.desvar.aoa_index] <= 1.0 and dvs[aero.desvar.aoa_index] >= -1.0):
-                            if 1: #(dvs[aero.desvar.aoa_index] <= 3.0 and dvs[aero.desvar.aoa_index] >= -3.0):
+                                dvs = aero.desvar.reverse_variable_change([MACH[ix,iy],1E7,AOA[ix,iy], 0.0,0.0, dv1,dv2,dv3,dv4, dv5,dv6])  ##### MUST DO BETTER for Reynolds... Must be the one from trajectory!!! FOR REYNOLDS
+                                dvs[aero.desvar.rey_index] = 0.0 # Force Reynolds to Reference Trajectory
 
-                                if (flag == 'DRAG'):
+#                               if (dvs[aero.desvar.aoa_index] <= 1.0 and dvs[aero.desvar.aoa_index] >= -1.0):
+                                if 1: #(dvs[aero.desvar.aoa_index] <= 3.0 and dvs[aero.desvar.aoa_index] >= -3.0):
 
-                                    COEFF[ix,iy] = aero.drag(dvs)
+                                    if (flag == 'DRAG'):
 
-                                elif (flag == 'PITCH'):
+                                        COEFF[ix,iy] = aero.drag(dvs)
 
-                                    COEFF[ix,iy] = aero.moment_y(dvs,cog_x,cog_z)
+                                    elif (flag == 'PITCH'):
 
-                                elif (flag == 'TRIM'):
+                                        COEFF[ix,iy] = aero.moment_y(dvs,cog_x,cog_z)
 
-                                    COEFF[ix,iy] = aero.trim(dvs,cog_x,cog_z)[aero.desvar.el_index]*180.0/np.pi
+                                    elif (flag == 'TRIM'):
 
-                                elif (flag == 'TRIMMED_STATIC_MARGIN'):
+                                        COEFF[ix,iy] = aero.trim(dvs,cog_x,cog_z)[aero.desvar.el_index]*180.0/np.pi
 
-                                    trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
-                                    if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
-                                        COEFF[ix,iy] = aero.static_margin(trimmed_dvs,cog_x,cog_z)
-                                    else:
-                                        COEFF[ix,iy] = -10.0
+                                    elif (flag == 'TRIMMED_STATIC_MARGIN'):
 
-                                elif (flag == 'K_ALPHA'):
+                                        trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
+                                        if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
+                                            COEFF[ix,iy] = aero.static_margin(trimmed_dvs,cog_x,cog_z)
+                                        else:
+                                            COEFF[ix,iy] = -10.0
 
-                                    trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
-                                    if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
-                                        COEFF[ix,iy] = aero.k_alpha(trimmed_dvs,cog_x,cog_z)
-                                    else:
-                                        COEFF[ix,iy] = 10000.0
+                                    elif (flag == 'K_ALPHA'):
 
-                                elif (flag == 'EFFICIENCY'):
+                                        trimmed_dvs = aero.trim(dvs,cog_x,cog_z)
+                                        if (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi < 30.0*0.3) and (trimmed_dvs[aero.desvar.el_index]*180.0/np.pi > -20.0*0.3):
+                                            COEFF[ix,iy] = aero.k_alpha(trimmed_dvs,cog_x,cog_z)
+                                        else:
+                                            COEFF[ix,iy] = 10000.0
 
-                                    COEFF[ix,iy] = aero.max_trimmed_efficiency(dvs,cog_x,cog_z)
+                                    elif (flag == 'EFFICIENCY'):
 
-                            else:
+                                        COEFF[ix,iy] = aero.max_trimmed_efficiency(dvs,cog_x,cog_z)
 
-                                COEFF[ix,iy] = float('NaN')
+                                else:
+
+                                    COEFF[ix,iy] = float('NaN')
+
+                        np.save('%s_%d_%s' % (flag,index,case), COEFF)
+
+                    else:
+
+                        COEFF = np.load(os.path.join(project_folder,'%s_%d_%s.npy' % (flag,index,case)))
+
 
                     if (flag == 'DRAG'):
 
@@ -275,13 +331,11 @@ def load_models( filename         ,
         fig.savefig(os.path.join(project_folder,'fig_reynolds.png'))
         plt.close(fig)
 
-
-
-    curves = True
-
     if curves:
 
-        mach_vec = [0.3, 0.7, 0.9, 1.2, 1.5, 1.7, 2.0, 3.0, 5.0, 7.0]
+        print 'fig_lift.png', 'fig_drag.png', 'fig_moment_y.png'
+
+        mach_vec = [0.3, 0.7, 0.9, 1.2, 1.5, 1.7, 2.0, 3.0, 5.0, 7.0, 8.0]
         aoa_range  = [[0.0,15.0],
                       [0.0,15.0],
                       [0.0,15.0],
@@ -291,7 +345,7 @@ def load_models( filename         ,
                       [2.5,20.0],
                       [5.0,25.0],
                       [7.5,35.0],
-                      [15.0,40.0]]
+                      [15.0,40.0],[15.0,40.0]]
 
         cog = 9.7
 
@@ -352,6 +406,7 @@ def load_models( filename         ,
         plt.close(fig_3)
 
 
+        print 'fig_trajectory.png'
 
         matplotlib.rcParams['figure.figsize'] = 20, 20
 
@@ -384,15 +439,15 @@ def load_models( filename         ,
 
         ax = plt.subplot(5,2,6)
         ax.set_xlabel('Time [s]', fontsize=18)
-        ax.set_ylabel('Heat Flux [W/m^2]', fontsize=18)
-        ax.plot(mission_data[:,0], mission_data[:,16], color='k')
+        ax.set_ylabel('Acceleration', fontsize=18)
+        ax.plot(mission_data[:,0], mission_data[:,17], 'k', label='nx')
+        ax.plot(mission_data[:,0], mission_data[:,19], 'k--', label='nz')
+        ax.legend(fontsize=18)
 
         ax = plt.subplot(5,2,7)
         ax.set_xlabel('Time [s]', fontsize=18)
-        ax.set_ylabel('Acceleration', fontsize=18)
-        ax.plot(mission_data[:,0], mission_data[:,17], color='k')
-        ax.plot(mission_data[:,0], mission_data[:,18], color='r')
-        ax.plot(mission_data[:,0], mission_data[:,19], color='b')
+        ax.set_ylabel('Heat Flux [W/m^2]', fontsize=18)
+        ax.plot(mission_data[:,0], mission_data[:,16], color='k')
 
         ax = plt.subplot(5,2,8)
         ax.set_xlabel('Time [s]', fontsize=18)
@@ -404,17 +459,47 @@ def load_models( filename         ,
         ax.set_ylabel('AoA [Deg]', fontsize=18)
         ax.plot(mission_data[:,0], mission_data[:,9], color='k')
 
-
-
         ax = plt.subplot(5,2,10)
         ax.set_xlabel('Time [s]', fontsize=18)
         ax.set_ylabel('Coefficients', fontsize=18)
-        ax.plot(mission_data[:,0], mission_data[:,21], color='k')
-        ax.plot(mission_data[:,0], mission_data[:,22], color='b')
+        ax.plot(mission_data[:,0], mission_data[:,21], 'k', label='Drag')
+        ax.plot(mission_data[:,0], mission_data[:,22], 'k--', label='Lift')
+        ax.legend(fontsize=18)
 
         fig.savefig(os.path.join(project_folder,'fig_trajectory.png'), bbox_inches='tight')
         plt.close(fig)
 
+
+        print 'fig_load_cases.png'
+
+        matplotlib.rcParams['figure.figsize'] = 20, 6
+
+        load_case_1 = 20
+        load_case_2 = 220
+        load_case_3 = 470
+
+        fig = plt.figure()
+
+        ax = plt.subplot(1,2,1)
+        ax.set_xlabel('Time [s]', fontsize=18)
+        ax.set_ylabel('Dynamic Pressure [Pa]', fontsize=18)
+        ax.fill_between([load_case_1-15, load_case_1+15], [0,0], [14000,14000], color='red', alpha='0.3', lw=0, zorder=3)
+        ax.fill_between([load_case_2-15, load_case_2+15], [0,0], [14000,14000], color='green', alpha='0.3', lw=0, zorder=3)
+        ax.fill_between([load_case_3-15, load_case_3+15], [0,0], [14000,14000], color='blue', alpha='0.3', lw=0, zorder=3)
+        ax.plot(mission_data[:,0], mission_data[:,15], color='k')
+
+        ax = plt.subplot(1,2,2)
+        ax.set_xlabel('Time [s]', fontsize=18)
+        ax.set_ylabel('Acceleration', fontsize=18)
+        ax.plot(mission_data[:,0], mission_data[:,17], 'k', label='nx')
+        ax.plot(mission_data[:,0], mission_data[:,19], 'k--', label='nz')
+        ax.fill_between([load_case_1-15, load_case_1+15], [-5,-5], [3,3], color='red', alpha='0.3', lw=0, zorder=3)
+        ax.fill_between([load_case_2-15, load_case_2+15], [-5,-5], [3,3], color='green', alpha='0.3', lw=0, zorder=3)
+        ax.fill_between([load_case_3-15, load_case_3+15], [-5,-5], [3,3], color='blue', alpha='0.3', lw=0, zorder=3)
+        ax.legend(fontsize=18)
+
+        fig.savefig(os.path.join(project_folder,'fig_load_cases.png'), bbox_inches='tight')
+        plt.close(fig)
 
 
     # # Plot

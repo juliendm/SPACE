@@ -13,6 +13,9 @@ from .. import util as spaceutil
 from ..eval import model as spacemodel
 from ..io   import redirect_folder, redirect_output
 
+from ..util import DesignVariables
+from ..surfpack import Surfpack
+
 # ----------------------------------------------------------------------
 #  Main Function Interface
 # ----------------------------------------------------------------------
@@ -112,139 +115,237 @@ def mission(config, state=None):
 #  Aerodynamics Function
 # ----------------------------------------------------------------------
 
-
-
 def aerodynamics(config, state=None):
 
-    config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
+    kriging = True
 
-    Mach = float(config.MACH_NUMBER)
-
-    if Mach > 1.0:
-
-        config_aero.MGLEVEL= '0'
-        config_aero.MGCYCLE= 'W_CYCLE'
-        config_aero.EXT_ITER= '3000'
-
-        if Mach < 2.0:                           # 1.0 - 2.0
-            config_aero.CFL_NUMBER= '4.0'
-        elif Mach < 3.0 :                        # 2.0 - 3.0
-            config_aero.CFL_NUMBER= '3.5'
-        elif Mach < 5.0:                         # 3.0 - 5.0
-            config_aero.CFL_NUMBER= '3.5'
-        elif Mach < 8.0:                         # 5.0 - 8.0
-            config_aero.CFL_NUMBER= '2.5'
-        else:                                    # >= 8.0
-            config_aero.CFL_NUMBER= '2.0'
-
-        config_aero.CONV_CRITERIA= 'CAUCHY'
-        config_aero.CAUCHY_FUNC_FLOW= 'DRAG'
-        config_aero.CAUCHY_EPS= '1E-4'
-        config_aero.CAUCHY_ELEMS= '100'
-
-
-    else:
-        
-        config_aero.MGLEVEL= '3'
-        config_aero.MGCYCLE= 'W_CYCLE'
-        config_aero.EXT_ITER= '3000'
-
-        config_aero.CFL_NUMBER= '5.0'
-
-#        config_aero.MGLEVEL= '3'
-#        config_aero.MGCYCLE= 'W_CYCLE'
-#        config_aero.CFL_NUMBER= '2.0'
-#        config_aero.EXT_ITER= '3000'
-#        config_aero.CFL_ADAPT= 'YES'
-#        config_aero.CFL_ADAPT_PARAM= '( 1.5, 0.5, 2.0, 5.0 )'
-
-        config_aero.CONV_CRITERIA= 'CAUCHY'
-        config_aero.CAUCHY_FUNC_FLOW= 'LIFT'
-        config_aero.CAUCHY_EPS= '1E-4'
-        config_aero.CAUCHY_ELEMS= '100'
-
-
-    
-    # ----------------------------------------------------
-    #  Initialize    
-    # ----------------------------------------------------
-    
-    # initialize
-    state = spaceio.State(state)
-    if not state.FILES.has_key('CONFIG_AERO'):
-        state.FILES.CONFIG_AERO = config['CONFIG_AERO_FILENAME']
-
-    # console output
-    log_direct = 'log_direct.out'
-    
     # ----------------------------------------------------    
-    #  Generate Mesh
+    #  Generate Geometry
     # ----------------------------------------------------
 
     geometry(config,state)
 
-    fluid_mesh(config,state)
-
     # ----------------------------------------------------    
-    #  Direct Solution
-    # ----------------------------------------------------  
+    #  Compute Aero
+    # ----------------------------------------------------
+
+    if kriging:
+
+          return aerodynamics_kriging(config, state)
+
+    else:
+
+        config_aero = spaceio.Config(config.CONFIG_AERO_FILENAME)
+
+        Mach = float(config.MACH_NUMBER)
+
+        if Mach > 1.0:
+
+            config_aero.MGLEVEL= '0'
+            config_aero.MGCYCLE= 'W_CYCLE'
+            config_aero.EXT_ITER= '3000'
+
+            if Mach < 2.0:                           # 1.0 - 2.0
+                config_aero.CFL_NUMBER= '4.0'
+            elif Mach < 3.0 :                        # 2.0 - 3.0
+                config_aero.CFL_NUMBER= '3.5'
+            elif Mach < 5.0:                         # 3.0 - 5.0
+                config_aero.CFL_NUMBER= '3.5'
+            elif Mach < 8.0:                         # 5.0 - 8.0
+                config_aero.CFL_NUMBER= '2.5'
+            else:                                    # >= 8.0
+                config_aero.CFL_NUMBER= '2.0'
+
+            config_aero.CONV_CRITERIA= 'CAUCHY'
+            config_aero.CAUCHY_FUNC_FLOW= 'DRAG'
+            config_aero.CAUCHY_EPS= '1E-4'
+            config_aero.CAUCHY_ELEMS= '100'
+
+
+        else:
+            
+            config_aero.MGLEVEL= '3'
+            config_aero.MGCYCLE= 'W_CYCLE'
+            config_aero.EXT_ITER= '3000'
+
+            config_aero.CFL_NUMBER= '5.0'
+
+    #        config_aero.MGLEVEL= '3'
+    #        config_aero.MGCYCLE= 'W_CYCLE'
+    #        config_aero.CFL_NUMBER= '2.0'
+    #        config_aero.EXT_ITER= '3000'
+    #        config_aero.CFL_ADAPT= 'YES'
+    #        config_aero.CFL_ADAPT_PARAM= '( 1.5, 0.5, 2.0, 5.0 )'
+
+            config_aero.CONV_CRITERIA= 'CAUCHY'
+            config_aero.CAUCHY_FUNC_FLOW= 'LIFT'
+            config_aero.CAUCHY_EPS= '1E-4'
+            config_aero.CAUCHY_ELEMS= '100'
+
+
+        
+        # ----------------------------------------------------
+        #  Initialize    
+        # ----------------------------------------------------
+        
+        # initialize
+        state = spaceio.State(state)
+        if not state.FILES.has_key('CONFIG_AERO'):
+            state.FILES.CONFIG_AERO = config['CONFIG_AERO_FILENAME']
+
+        # console output
+        log_direct = 'log_direct.out'
+        
+        # ----------------------------------------------------    
+        #  Generate Mesh
+        # ----------------------------------------------------
+
+        fluid_mesh(config,state)
+
+        # ----------------------------------------------------    
+        #  Direct Solution
+        # ----------------------------------------------------  
+
+        # redundancy check
+        direct_done = all([state.FUNCTIONS.has_key(key) for key in spaceio.optnames_aero[:9]])
+
+        if not direct_done:
+        
+            config_aero.MESH_FILENAME = config.FLUID_VOLUME + '.su2'
+            config_aero.SURFACE_FLOW_FILENAME = config.FLUID_SURFACE_FLOW
+
+            config_aero.MACH_NUMBER = config.MACH_NUMBER
+            config_aero.REYNOLDS_NUMBER = config.REYNOLDS_NUMBER
+            config_aero.AoA = config.AoA
+
+            config_aero.SIDESLIP_ANGLE = config.SIDESLIP_ANGLE
+            config_aero.REF_ORIGIN_MOMENT_X = config.REF_ORIGIN_MOMENT_X
+            config_aero.REF_ORIGIN_MOMENT_Y = config.REF_ORIGIN_MOMENT_Y
+            config_aero.REF_ORIGIN_MOMENT_Z = config.REF_ORIGIN_MOMENT_Z
+            config_aero.REF_LENGTH_MOMENT = config.REF_LENGTH_MOMENT
+            config_aero.REF_AREA = config.REF_AREA
+
+            config_aero.NUMBER_PART = int(config.NUMBER_PART)
+
+            files = state.FILES
+            pull = []; link = []
+            
+            # files: mesh
+            name = files.FLUID_VOLUME_MESH
+            #name = files.FLUID_VOLUME_SU2
+            link.append(name)
+            name = files.BOUNDARY_BACK_MESH
+            link.append(name)
+
+            # output redirection
+            with redirect_folder('DIRECT', pull, link) as push:
+                with redirect_output(log_direct):     
+                    
+                    # # RUN DIRECT SOLUTION # #
+                    info = spacerun.direct(config_aero)
+                    #spacerun.restart2solution(config_aero,info)
+                    state.update(info)
+                    
+                    # direct files to push
+                    name = info.FILES['FLUID_SURFACE_FLOW']
+                    push.extend([name])
+
+        else:
+            print 'Aerodynamics done'
+
+        # return output
+        aero = spaceutil.ordered_bunch()
+        for key in spaceio.optnames_aero:
+            if state.FUNCTIONS.has_key(key):
+                aero[key] = state.FUNCTIONS[key]
+
+        return aero
+
+#: def aerodynamics()
+
+# ----------------------------------------------------------------------
+#  Aerodynamics Kriging Function
+# ----------------------------------------------------------------------
+
+def aerodynamics_kriging(config, state=None):
+
+
+    precomputed = False
+
+    # console output
+    log_direct = 'log_direct.out'
+
+
+
 
     # redundancy check
-    direct_done = all([state.FUNCTIONS.has_key(key) for key in spaceio.optnames_aero[:9]])
+    aerodynamics_kriging_done = all( [ state.FILES.has_key(key) for key in ['FLUID_SURFACE_FLOW'] ] )
 
-    if not direct_done:
-    
-        config_aero.MESH_FILENAME = config.FLUID_VOLUME + '.su2'
-        config_aero.SURFACE_FLOW_FILENAME = config.FLUID_SURFACE_FLOW
 
-        config_aero.MACH_NUMBER = config.MACH_NUMBER
-        config_aero.REYNOLDS_NUMBER = config.REYNOLDS_NUMBER
-        config_aero.AoA = config.AoA
+    if not aerodynamics_kriging_done:
 
-        config_aero.SIDESLIP_ANGLE = config.SIDESLIP_ANGLE
-        config_aero.REF_ORIGIN_MOMENT_X = config.REF_ORIGIN_MOMENT_X
-        config_aero.REF_ORIGIN_MOMENT_Y = config.REF_ORIGIN_MOMENT_Y
-        config_aero.REF_ORIGIN_MOMENT_Z = config.REF_ORIGIN_MOMENT_Z
-        config_aero.REF_LENGTH_MOMENT = config.REF_LENGTH_MOMENT
-        config_aero.REF_AREA = config.REF_AREA
-
-        config_aero.NUMBER_PART = int(config.NUMBER_PART)
-
-        files = state.FILES
         pull = []; link = []
-        
-        # files: mesh
-        name = files.FLUID_VOLUME_MESH
-        #name = files.FLUID_VOLUME_SU2
-        link.append(name)
-        name = files.BOUNDARY_BACK_MESH
-        link.append(name)
 
         # output redirection
         with redirect_folder('DIRECT', pull, link) as push:
-            with redirect_output(log_direct):     
-                
-                # # RUN DIRECT SOLUTION # #
-                info = spacerun.direct(config_aero)
-                #spacerun.restart2solution(config_aero,info)
-                state.update(info)
-                
-                # direct files to push
-                name = info.FILES['FLUID_SURFACE_FLOW']
-                push.extend([name])
+            with redirect_output(log_direct):  
+
+                # if Krigings are loaded: aerodynamics_kriging() uses krigings
+                if not precomputed:
+
+                    n_models = 2180
+
+                    desvar = DesignVariables()
+                    model = Surfpack('placeholder', desvar.ndim)
+                    dvs = desvar.pack(config)
+
+                    fluid_surface_flow_filename = config.FLUID_SURFACE_FLOW + '.sol'
+
+                    sol = open(fluid_surface_flow_filename, 'w')
+                    sol.write('MeshVersionFormatted 2\n\nDimension 3\n\nSolAtVertices\n' + str(n_models) + '\n4 1 1 1 1\n\n')
+
+                    for index in range(n_models):
+
+                        model.name = 'CP_%05d' % (index+1)
+                        cp = model.eval(dvs)
+
+                        model.name = 'CFX_%05d' % (index+1)
+                        cfx = model.eval(dvs)
+
+                        model.name = 'CFY_%05d' % (index+1)
+                        cfy = model.eval(dvs)
+
+                        model.name = 'CFZ_%05d' % (index+1)
+                        cfz = model.eval(dvs)
+
+                        sol.write('%s %s %s %s\n' % (cp, cfx, cfy, cfz))
+
+                    sol.write('\nEnd\n')
+                    sol.close()
+
+                    state.FILES.FLUID_SURFACE_FLOW = fluid_surface_flow_filename
+
+                    # direct files to push
+                    name = state.FILES.FLUID_SURFACE_FLOW
+                    push.extend([name])
+
+
+
+
+                # if Krigings are not loaded: link a file .sol with adequate dsn number
+                else:
+
+                    #os.link()
+
+                    raise NotImplementedError
 
     else:
-        print 'Aerodynamics done'
+        print 'Aerodynamics Kriging done'
 
-    # return output
-    aero = spaceutil.ordered_bunch()
-    for key in spaceio.optnames_aero:
-        if state.FUNCTIONS.has_key(key):
-            aero[key] = state.FUNCTIONS[key]
+    # return empty
+    return spaceutil.ordered_bunch()
 
-    return aero
-
-#: def aerodynamics()
+#: def aerodynamics_kriging()
 
 # ----------------------------------------------------------------------
 #  Structure Function
@@ -266,7 +367,7 @@ def structure(config, state=None):
     #  Aerodynamics Solution
     # ----------------------------------------------------    
 
-    ### aerodynamics(config,state)
+    aerodynamics(config,state)
 
     # ----------------------------------------------------    
     #  Structure Solution
@@ -285,8 +386,8 @@ def structure(config, state=None):
         # files: mesh
         name = files.FLUID_SURFACE_FLOW
         link.append(name)
-        # name = files.FLUID_SURFACE_MESH
-        # link.append(name)
+        name = files.FLUID_SURFACE_MESH
+        link.append(name)
         name = files.STRUCT_SURFACE_MESH
         link.append(name)
         name = files.STRUCT_BDF
@@ -331,7 +432,10 @@ def geometry(config, state=None):
     # ----------------------------------------------------    
 
     # redundancy check
-    geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
+    if config.STRUCT == 'NONE':
+        geometry_done = all( [ state.FILES.has_key(key) for key in ['FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
+    else:
+        geometry_done = all( [ state.FILES.has_key(key) for key in ['STRUCT_BDF','STRUCT_MESH','STRUCT_SURFACE_MESH','FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
 
     if not geometry_done:
 

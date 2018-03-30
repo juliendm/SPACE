@@ -13,8 +13,9 @@ from mpi4py import MPI
 from baseclasses import *
 from tacs import *
 
-#from pyOpt import *
-from pyoptsparse import *
+from pyOpt import *
+from pyOpt import SNOPT
+#from pyoptsparse import *
 
 # from .. import io   as spaceio
 # from .. import util as spaceutil
@@ -47,84 +48,110 @@ def structure(config):
 
     loads = []
 
-    # LOAD CASE 1
-
-    # MACH_NUMBER= 0.9
-    # REYNOLDS_NUMBER= 6800000.0
-    # AoA= 14.0
-
-    fuel_percentage = (35500.0 - 13250.0) / (36800.0 - 13250.0)
-    pdyn_inf = 13415.473225                                           # float(konfig.P_DYN_INF)
-    nx = 0.806527                                                     # float(konfig.ACCELERATION_X)
-    ny = 0.0                                                          # float(konfig.ACCELERATION_Y)
-    nz = -1.804901                                                    # float(konfig.ACCELERATION_Z)
-    half_thrust = 338617.115272/2.0                                   # float(konfig.HALF_THRUST)
-
-    loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
-    thrust_angle = 0.0 # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
-    gravity_vector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
-
-
     load_filename = 'load_1.dat'
-
     konfig = copy.deepcopy(config)
-    konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_001'
-    spaceutil.surf2sol(konfig)
-    SPACE_INT(konfig)
-    load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
-    load.update(ini_half_mass_guess)
 
+    # spaceutil.surf2sol(konfig) 
+    if not os.path.exists(konfig.FLUID_SURFACE + '.sol'): os.symlink(konfig.FLUID_SURFACE_FLOW + '.sol', konfig.FLUID_SURFACE + '.sol')
+
+    SPACE_INT(konfig)
+    load = spaceutil.Load(konfig, load_filename)
+    load.update(ini_half_mass_guess)
     loads.append(load)
 
 
-    # LOAD CASE 2
-
-    # MACH_NUMBER= 8.0
-    # REYNOLDS_NUMBER= 500.0
-    # AoA= 2.5
-
-    fuel_percentage = (13350.0 - 13250.0) / (36800.0 - 13250.0)
-    pdyn_inf = 6.123247
-    nx = 3.080521
-    ny = 0.0
-    nz = 0.000654
-    half_thrust = 399999.667471/2.0  
-
-    load_filename = 'load_2.dat'
-
-    konfig = copy.deepcopy(config)
-    konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_002'
-    spaceutil.surf2sol(konfig)
-    SPACE_INT(konfig)
-    load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
-    load.update(ini_half_mass_guess)
-
-    loads.append(load)
 
 
-    # LOAD CASE 3
 
-    # MACH_NUMBER= 3.9
-    # REYNOLDS_NUMBER= 900000.0
-    # AoA= 22.5
 
-    fuel_percentage = 0.0
-    pdyn_inf = 8458.985536
-    nx = -0.919204
-    ny = 0.0
-    nz = -5.000117
-    half_thrust = 0.0 
+#     # LOAD CASE 1
 
-    load_filename = 'load_3.dat'
+#     # MACH_NUMBER= 0.9
+#     # REYNOLDS_NUMBER= 6800000.0
+#     # AoA= 14.0
 
-    konfig = copy.deepcopy(config)
-    konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_003'
-    spaceutil.surf2sol(konfig)
-    SPACE_INT(konfig)
-    load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
-    load.update(ini_half_mass_guess)
+#     fuel_percentage = (35500.0 - 13250.0) / (36800.0 - 13250.0)
+#     pdyn_inf = 13415.473225                                           # float(konfig.P_DYN_INF)
+#     nx = 0.806527                                                     # float(konfig.ACCELERATION_X)
+#     ny = 0.0                                                          # float(konfig.ACCELERATION_Y)
+#     nz = -1.804901                                                    # float(konfig.ACCELERATION_Z)
+#     half_thrust = 338617.115272/2.0                                   # float(konfig.HALF_THRUST)
 
-    loads.append(load)
+#     loadFactor = numpy.sqrt(nx*nx+ny*ny+nz*nz)
+#     thrust_angle = 0.0 # Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
+#     gravity_vector = -9.81 * numpy.array([-nx,ny,-nz])/loadFactor # Change of Frame: to Structure Frame
+
+
+#     load_filename = 'load_1.dat'
+
+#     konfig = copy.deepcopy(config)
+#     konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_001'
+
+#     if os.path.exists(konfig.FLUID_SURFACE_FLOW + '.dat'):
+
+#         spaceutil.surf2sol(konfig) # REPLACE THIS WITH KRIGING MODEL = f(dvs)
+
+
+# # When building KRIGING, only ONE load case
+
+
+
+#         SPACE_INT(konfig)
+#         load = spaceutil.Load(konfig, load_filename)
+#         load.update(ini_half_mass_guess)
+#         loads.append(load)
+
+
+    # # LOAD CASE 2
+
+    # # MACH_NUMBER= 8.0
+    # # REYNOLDS_NUMBER= 500.0
+    # # AoA= 2.5
+
+    # fuel_percentage = (13350.0 - 13250.0) / (36800.0 - 13250.0)
+    # pdyn_inf = 6.123247
+    # nx = 3.080521
+    # ny = 0.0
+    # nz = 0.000654
+    # half_thrust = 399999.667471/2.0  
+
+    # load_filename = 'load_2.dat'
+
+    # konfig = copy.deepcopy(config)
+    # konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_002'
+
+    # if os.path.exists(konfig.FLUID_SURFACE_FLOW + '.dat'):
+    #     spaceutil.surf2sol(konfig)
+    #     SPACE_INT(konfig)
+    #     load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    #     load.update(ini_half_mass_guess)
+    #     loads.append(load)
+
+
+    # # LOAD CASE 3
+
+    # # MACH_NUMBER= 3.9
+    # # REYNOLDS_NUMBER= 900000.0
+    # # AoA= 22.5
+
+    # fuel_percentage = 0.0
+    # pdyn_inf = 8458.985536
+    # nx = -0.919204
+    # ny = 0.0
+    # nz = -5.000117
+    # half_thrust = 0.0 
+
+    # load_filename = 'load_3.dat'
+
+    # konfig = copy.deepcopy(config)
+    # konfig.FLUID_SURFACE_FLOW = 'fluid_surface_flow_003'
+
+    # if os.path.exists(konfig.FLUID_SURFACE_FLOW + '.dat'):
+    #     spaceutil.surf2sol(konfig)
+    #     SPACE_INT(konfig)
+    #     load = spaceutil.Load(konfig, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle, fuel_percentage, safetyFactor_thrust, safetyFactor_inertial, safetyFactor_non_inertial)
+    #     load.update(ini_half_mass_guess)
+    #     loads.append(load)
 
 
     # Run
@@ -287,7 +314,11 @@ def computeTacs(config, loads):
         ################################################################################
         max_half_wet_mass = 0.0
         for i in range(numLoadCases):
-            loads[i].postprocess(x['struct'], corresp) # Update load._structure_mass and load._additional_mass
+
+            #current_dvs = x['struct']
+            current_dvs = x
+
+            loads[i].postprocess(current_dvs, corresp) # Update load._structure_mass and load._additional_mass
             half_wet_mass = loads[i]._half_structure_mass                                  \
                           + loads[i]._half_additional_mass                                 \
                           + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_lox   \
@@ -312,17 +343,59 @@ def computeTacs(config, loads):
             history_file.close()
             history_iteration['val'] += 1
 
-        return funcs, False
+        # return funcs, False
+
+        f = 0
+        g = []
+        for i in range(numLoadCases):
+                for name in evalFuncs:
+                    if 'mass' in name:
+                        obj_name = '%s_%s' % (SPs[i].name, name)
+                        if obj_name == 'lc0_mass':
+                            f = funcs[obj_name]
+                    if 'ksf' in name:
+                        con_name = '%s_%s' % (SPs[i].name, name)
+                        g.append(funcs[con_name])
+                    if 'ksb' in name:
+                        con_name = '%s_%s' % (SPs[i].name, name)
+                        g.append(funcs[con_name])
+                    if 'ad' in name:
+                        con_name = '%s_%s' % (SPs[i].name, name)
+                        g.append(funcs[con_name])
+        fail = 0
+        return f, g, fail
+
+
 
     # Sensitivies
-    def sens(x, funcs):
+    #def sens(x, funcs):
+    def sens(x, f, g):
         '''Evaluate the objective and constraint sensitivities'''
         funcsSens = {}
         for i in range(numLoadCases):
             FEASolver.evalFunctionsSens(SPs[i], funcsSens)
 
-        return funcsSens, False
+        # return funcsSens, False
 
+        df = []
+        dg = []
+        for i in range(numLoadCases):
+                for name in evalFuncs:
+                    if 'mass' in name:
+                        obj_name = '%s_%s' % (SPs[i].name, name)
+                        if obj_name == 'lc0_mass':
+                            df = funcsSens[obj_name][FEASolver.varSet].tolist()
+                    if 'ksf' in name:
+                        con_name = '%s_%s' % (SPs[i].name, name)
+                        dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
+                    if 'ksb' in name:
+                        con_name = '%s_%s' % (SPs[i].name, name)
+                        dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
+                    if 'ad' in name:
+                        con_name = '%s_%s' % (SPs[i].name, name)
+                        dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
+        fail = 0
+        return df, dg, fail
 
     # Set up the optimization problem
 
@@ -364,11 +437,28 @@ def computeTacs(config, loads):
     FEASolver.addVariablesPyOpt(optProb)
 
 
-    if comm.rank == 0:
-        print optProb
-    optProb.printSparsity()
+#    if comm.rank == 0:
+#        print optProb
+#    optProb.printSparsity()
 
-    opt = OPT('snopt',options={
+
+
+
+    # Solve
+
+    # opt = OPT('snopt',options={
+    #     'Major feasibility tolerance':1e-6,
+    #     'Major optimality tolerance':1e-6,
+    #     'Minor feasibility tolerance':1e-6,
+    #     'Iterations limit':100000,
+    #     'Major iterations limit':1000,
+    #     'Minor iterations limit':500,
+    #     'Major step limit':2.0})
+
+    # sol = opt(optProb, sens=sens)
+
+
+    snopt = SNOPT(options={
         'Major feasibility tolerance':1e-6,
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
@@ -376,10 +466,9 @@ def computeTacs(config, loads):
         'Major iterations limit':1000,
         'Minor iterations limit':500,
         'Major step limit':2.0})
+    [obj_fun, x_dvs, inform] = snopt(optProb, sens_type=sens)
 
-    # Solve
 
-    sol = opt(optProb, sens=sens)
 
     # Write Files
 
@@ -448,7 +537,7 @@ def addDVGroups(FEASolver, load):
     corresp = [-1 for index in range(FEASolver.nComp)]
     ndv = 0;
 
-    group_skin = False
+    group_skin = True
     group_junction = True
     group_member = True
 
@@ -499,6 +588,8 @@ def addDVGroups(FEASolver, load):
             FEASolver.addDVGroup(dv_name, include = MEMBER_IDS[i])
             ndv = ndv+1;
             corresp[MEMBER_IDS[i]] = ndv;
+
+    numpy.savetxt('corresp.dat',corresp,fmt='%i')
 
     return ndv, corresp, SKINS, JUNCTIONS, MEMBERS
 
@@ -977,6 +1068,12 @@ def write_files(FEASolver, SP, corresp, load, print_tag):
     for iTag_bdf in range(max(load._elem_tag_bdf)):
         thickness_tag[iTag_bdf] = x_final[corresp[iTag_bdf]-1]
 
+    mass_member = [0.0 for iMember in range(len(x_final))]
+    for iElem_bdf in range(load._nElem_bdf):
+        iMember = corresp[load._elem_tag_bdf[iElem_bdf]-1]-1
+        thickness_member = x_final[iMember]
+        mass_member[iMember] += load._area_elem[iElem_bdf]*thickness_member*load._material_rho
+
     write_sol_1('%s_struct_thickness.sol' % SP.name,thickness_point)
     disp = FEASolver.writeMeshDisplacements(SP, '%s_struct_disp.sol' % SP.name)
     force = FEASolver.writeMeshForces(SP, '%s_struct_force.sol' % SP.name)
@@ -993,6 +1090,11 @@ def write_files(FEASolver, SP, corresp, load, print_tag):
     for iDesVar in range(len(x_final)):
         dvs_file.write('%f\n' % x_final[iDesVar])
     dvs_file.close()
+
+    mass_member_file = open('%s_mass_member.dat' % SP.name,'w')
+    for iMember in range(len(mass_member)):
+        mass_member_file.write('%f\n' % mass_member[iMember])
+    mass_member_file.close()
 
     load.postprocess(x_final, corresp)
 

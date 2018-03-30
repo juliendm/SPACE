@@ -96,7 +96,7 @@ class Surfpack(object):
 
         return self._variance(self.name,c_dvs,self.ndim)
 
-    def max_variance(self,XB):
+    def max_variance(self,XB, number = 1):
 
         assert XB.shape[0] == self.ndim, 'wrong dimension'
         
@@ -113,20 +113,28 @@ class Surfpack(object):
                 
             prob.addObj('Estimated Variance')
 
-            opt = pyOpt.ALPSO(pll_type=None)
-            #opt = pyOpt.ALPSO(pll_type='MP',args=[1.0])
-            opt.setOption('fileout',0)
-            opt.setOption('maxOuterIter',10)
-            opt.setOption('stopCriteria',1)       
-            opt.setOption('SwarmSize',self.ndim*100)
-            opt(prob)
+            opt_ALPSO = pyOpt.ALPSO(pll_type=None)
+            #opt_ALPSO = pyOpt.ALPSO(pll_type='MP',args=[1.0])
+            opt_ALPSO.setOption('fileout',0)
+            opt_ALPSO.setOption('maxOuterIter',10)
+            opt_ALPSO.setOption('stopCriteria',1)       
+#            opt_ALPSO.setOption('SwarmSize',self.ndim*100)
+            opt_ALPSO.setOption('SwarmSize',self.ndim*20)
 
-            opt = pyOpt.SLSQP()
-            opt.setOption('IPRINT',-1)
-            opt.setOption('ACC',1e-5)
-            [YI_min,X_min,Info] = opt(prob.solution(0),sens_type='FD')
+            opt_SLSQP = pyOpt.SLSQP()
+            opt_SLSQP.setOption('IPRINT',-1)
+            opt_SLSQP.setOption('ACC',1e-5)
 
-        return X_min
+            vec = []
+            for index in range(number*10):
+                print index
+                [YI_min,X_min,Info] = opt_ALPSO(prob)
+                [YI_min,X_min,Info] = opt_SLSQP(prob.solution(index),sens_type='FD')
+                if not is_already_in(X_min,vec): vec.append(X_min.tolist())
+                if len(vec) >= number: break
+
+        if len(vec) == 1: return vec[0]
+        return vec
 
     def objective(self,XC):
         F = [-self.variance(XC)]
@@ -135,6 +143,13 @@ class Surfpack(object):
         fail = 0
         return F,G,fail 
 
+
+def is_already_in(X,vec):
+
+    for in_X in vec:
+        if len([i for i, j in zip(X, in_X) if i == j]) == len(X):
+            return True
+    return False
 
 def is_in(X,XB):
 

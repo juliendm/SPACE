@@ -58,4 +58,4 @@ if __name__ == '__main__':
     from SPACE import io   as spaceio
 
     config = spaceio.Config('config_DSN.cfg')
-    surf2pressuresol( config )
+    surf2sol( config )

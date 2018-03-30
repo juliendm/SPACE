@@ -13,8 +13,7 @@ import numpy as np
 
 class Load(object):
 
-    def __init__(self, config, load_filename, loadFactor, gravity_vector, pdyn_inf, half_thrust, thrust_angle = 0.0, fuel_percentage = 1.0, 
-        safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
+    def __init__(self, config, load_filename, safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
 
         self._nDim = 3
         self._nNode = 4
@@ -32,27 +31,35 @@ class Load(object):
         self._config = copy.deepcopy(config)
         self._load_filename = load_filename
 
-        self._loadFactor = loadFactor
-        self._gravity_vector = gravity_vector
+        nx = float(self._config.ACCELERATION_X)
+        ny = float(self._config.ACCELERATION_Y)
+        nz = float(self._config.ACCELERATION_Z)
 
-        self._half_thrust_newtons = half_thrust
-        self._thrust_angle = thrust_angle # 0 degrees for axial thrust
+        self._loadFactor = np.sqrt(nx*nx+ny*ny+nz*nz) 
+        self._gravity_vector = -9.81 * np.array([-nx,ny,-nz])/self._loadFactor # Change of Frame: to Structure Frame
 
-        self._pdyn_inf = pdyn_inf
-        self._fuel_percentage = fuel_percentage
+        self._half_thrust_newtons = 0.5 * float(config.THRUST);
+        self._thrust_angle = 0.0 # 0 degrees for axial thrust: Degree Of Freedom such that Sum M = 0 (Sum F = 0 via iteration with the Trajectory code)
+
+        self._pdyn_inf = float(self._config.P_DYN_INF)
 
         self._safetyFactor_thrust = safetyFactor_thrust
         self._safetyFactor_inertial = safetyFactor_inertial
         self._safetyFactor_non_inertial = safetyFactor_non_inertial
 
 
-        self._material_rho = float(self._config.MATERIAL_DENSITY)
+        self._material_rho = float(self._config.MATERIAL_DENSITY)                                                # TO BE SPECIFIED !!!!!!!!!!!
 
-        self._half_mass_payload = float(self._config.HALF_PAYLOAD_MASS)
-        self._half_mass_fuel_kero = float(self._config.HALF_KERO_MASS)
-        self._half_mass_fuel_lox = float(self._config.HALF_LOX_MASS)
-        self._half_max_thrust_newtons = float(self._config.HALF_MAX_THRUST)
-        self._traj_max_pdyn_inf = float(self._config.TRAJ_MAX_PDYN_INF)
+        self._half_mass_payload = 0.5 * float(self._config.PAYLOAD_MASS)                                         # TO BE SPECIFIED !!!!!!!!!!!
+        self._half_mass_fuel_kero = 0.5 * float(self._config.MAX_FUEL_MASS) * 0.4; # 40% KERO                    # TO BE SPECIFIED !!!!!!!!!!!
+        self._half_mass_fuel_lox = 0.5 * float(self._config.MAX_FUEL_MASS) * 0.6; # 60% LOX
+
+        self._fuel_percentage = float(self._config.FUEL_MASS) / float(self._config.MAX_FUEL_MASS)
+
+        self._half_max_thrust_newtons =  0.5 * float(config.THRUST)   # float(self._config.HALF_MAX_THRUST)      # TO BE IMPROVED
+        self._traj_max_pdyn_inf = float(self._config.P_DYN_INF)       # float(self._config.TRAJ_MAX_PDYN_INF)    # TO BE IMPROVED
+
+        self._ref_area = float(self._config.REF_AREA)
 
         # Read Meshes
 
@@ -194,8 +201,8 @@ class Load(object):
 
         self._half_structure_mass = 0.0
         for iElem_bdf in range(self._nElem_bdf):
-            elem_thickess = x_dvs[corresp[self._elem_tag_bdf[iElem_bdf]-1]-1]
-            elem_mass = self._area_elem[iElem_bdf]*elem_thickess*self._material_rho
+            elem_thickness = x_dvs[corresp[self._elem_tag_bdf[iElem_bdf]-1]-1]
+            elem_mass = self._area_elem[iElem_bdf]*elem_thickness*self._material_rho
             self._half_structure_mass += elem_mass
             for iDim in range(self._nDim):
                 self._center_of_mass[iDim] += elem_mass*self._center_elem[iElem_bdf][iDim]
@@ -209,6 +216,16 @@ class Load(object):
 
         for iDim in range(self._nDim):
             self._center_of_mass[iDim] /= (self._half_structure_mass+self._half_additional_mass)
+
+        # Aero
+
+        Axial_Coeff = 0
+        Normal_Coeff = 0
+        for iPoint_bdf in range(self._nPoint_bdf):
+            Axial_Coeff += self._load_aero_bdf[iPoint_bdf][0]
+            Normal_Coeff += self._load_aero_bdf[iPoint_bdf][2]
+        Axial_Coeff /= self._pdyn_inf * self._ref_area
+        Normal_Coeff /= self._pdyn_inf * self._ref_area
 
         # Forces
 
@@ -239,8 +256,8 @@ class Load(object):
 
         # pitch_moment_elem = 0.0
         # for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)
-        #     elem_thickess = x_final[self._elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in non_inertial_forces if computed with additional masses
-        #     elem_mass = self._area_elem[iElem_bdf]*elem_thickess*material_rho
+        #     elem_thickness = x_final[self._elem_tag_bdf[iElem_bdf]-1]         #                      - will cancel out Inertial Forces included in non_inertial_forces if computed with additional masses
+        #     elem_mass = self._area_elem[iElem_bdf]*elem_thickness*material_rho
         #     local_force = elem_mass*self._gravityVector*self._loadFactor*self._safetyFactor_inertial
         #     for iDim in range(self._nDim):
         #         dist[iDim] = self._center_elem[iElem_bdf][iDim]-com[iDim]
@@ -280,6 +297,9 @@ class Load(object):
         postpro.write('Center of Pressure: %f,%f\n' % (self._center_of_pressure[0],self._center_of_pressure[2]))
         postpro.write('Distance CoG-CoP x: %f\n'    % (np.sqrt((self._center_of_mass[0]-self._center_of_pressure[0])**2.0)))
         postpro.write('Distance CoG-CoP z: %f\n'    % (np.sqrt((self._center_of_mass[2]-self._center_of_pressure[2])**2.0)))
+        postpro.write('\n')
+
+        postpro.write('Aero Coeff : %f,%f\n' % (Axial_Coeff,Normal_Coeff))
         postpro.write('\n')
 
         forces_in_non_inertial_frame = non_inertial_forces+inertial_forces
@@ -496,6 +516,7 @@ class Load(object):
     def __compte_load_noninertial(self):
 
         self._load_noninertial_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
+        self._load_aero_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
 
         # NON INERTIAL
 
@@ -503,19 +524,22 @@ class Load(object):
 
             # AERO
 
-            if not iPoint_bdf in self._apply_fuse_r:
-
-                # Pressure
+            # Pressure
+            
+            pressure = self._pdyn_inf*self._pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
+            for iDim in range(self._nDim):
                 
-                pressure = self._pdyn_inf*self._pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
-                for iDim in range(self._nDim):
-                    self._load_noninertial_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial # MINUS SIGN CAUSE PRESSURE PUSHES INWARD
+                if not iPoint_bdf in self._apply_fuse_r: self._load_noninertial_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial # MINUS SIGN CAUSE PRESSURE PUSHES INWARD
+                self._load_aero_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure
 
-                # Friction
+            # Friction
+            
+            for iDim in range(self._nDim):
+                shear_stress = self._pdyn_inf*self._frictionCoeff_bdf[iPoint_bdf][iDim]
                 
-                for iDim in range(self._nDim):
-                    shear_stress = self._pdyn_inf*self._frictionCoeff_bdf[iPoint_bdf][iDim]
-                    self._load_noninertial_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress * self._safetyFactor_non_inertial
+                if not iPoint_bdf in self._apply_fuse_r: self._load_noninertial_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress * self._safetyFactor_non_inertial
+                self._load_aero_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress
+
 
             # THRUST
 

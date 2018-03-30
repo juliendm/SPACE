@@ -30,14 +30,14 @@ def main():
 
 def filter_designs( project_folder, apply = False ):
 
-    ls = glob.glob(os.path.join(project_folder,'DESIGNS','*'))
-    ls.sort()
-
-    for dsn in ls:
-        path = os.path.join(dsn,'fluid_surface_flow.dat')
-        if not os.path.exists(path):
-            print 'missing ' + dsn
-            if apply: shutil.rmtree(dsn)
+#    ls = glob.glob(os.path.join(project_folder,'DESIGNS','*'))
+#    ls.sort()
+#
+#    for dsn in ls:
+#        path = os.path.join(dsn,'fluid_surface_flow.dat')
+#        if not os.path.exists(path):
+#            print 'missing ' + dsn
+#            if apply: shutil.rmtree(dsn)
 
     ls_filtered = glob.glob(os.path.join(project_folder,'DESIGNS','*'))
     ls_filtered.sort()
@@ -45,6 +45,8 @@ def filter_designs( project_folder, apply = False ):
     for index, dsn in enumerate(ls_filtered):
         new_index = '%03d' % (index+1)
         new_dsn = os.path.join(project_folder,'DESIGNS','DSN_'+new_index)
+        if (not dsn == new_dsn):
+            print 'should move ' + dsn
         if (not dsn == new_dsn) and apply:
             print 'moving ' + dsn
             shutil.move(dsn,new_dsn)

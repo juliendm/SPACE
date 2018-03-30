@@ -249,14 +249,24 @@ class Spaceplane(PGMconfiguration):
         comps = this.comps
 
 
-        comps['fuse'].faces['bot'].set_option('num_pt', 'v', [8,10,15,10]+[6]*(this.fuse_num_x-4), both=False)
+        # comps['fuse'].faces['bot'].set_option('num_pt', 'v', [8,10,15,10]+[6]*(this.fuse_num_x-4), both=False)
 
-        comps['fuse'].faces['bot'].set_option('num_pt', 'u', [5,5,5,5,5,5,5,5], both=False)
-        comps['fuse'].faces['lft'].set_option('num_pt', 'u', [6,6,6,8], both=False)
+        # comps['fuse'].faces['bot'].set_option('num_pt', 'u', [5,5,5,5,5,5,5,5], both=False)
+        # comps['fuse'].faces['lft'].set_option('num_pt', 'u', [6,6,6,8], both=False)
 
-        comps['lwing'].faces['upp'].set_option('num_pt', 'v', [4,4,4,4,4,4,5,5,5,5,5,5], both=False)
+        # comps['lwing'].faces['upp'].set_option('num_pt', 'v', [4,4,4,4,4,4,5,5,5,5,5,5], both=False)
 
-        comps['flap'].faces['upp'].set_option('num_pt', 'v', [6,6,6,6], both=False)
+        # comps['flap'].faces['upp'].set_option('num_pt', 'v', [6,6,6,6], both=False)
+
+        comps['fuse'].faces['bot'].set_option('num_pt', 'v', [4,5,7,5]+[3]*(this.fuse_num_x-4), both=False)
+
+        comps['fuse'].faces['bot'].set_option('num_pt', 'u', [3,3,3,3,3,3,3,3], both=False)
+        comps['fuse'].faces['lft'].set_option('num_pt', 'u', [3,3,3,3], both=False)
+
+        comps['lwing'].faces['upp'].set_option('num_pt', 'v', [2,2,2,2,2,2,2,2,2,2,2,2], both=False)
+
+        comps['flap'].faces['upp'].set_option('num_pt', 'v', [3,3,3,3], both=False)
+
 
 
     def meshStructure(this, filename):

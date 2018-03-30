@@ -54,6 +54,26 @@ class DesignVariables(object):
 
         ])
 
+
+        self.ndim_struct = 14
+
+        self.XB_STRUCT = np.array([
+            self.XB_SUP[0],
+            self.XB_SUP[1],
+            self.XB_SUP[2],
+            [-3.0,    6.0],       # dv_nx
+            [-6.0,    3.0],       # dv_nz
+            [ 0.0,  3.0e6],       # dv_thrust     [N]
+            [ 0.0, 35.0e3],       # dv_pdyn      [Pa]
+            [ 0.0, 35.0e3],       # dv_fuel_mass [kg]
+            self.XB_SUP[5],
+            self.XB_SUP[6],
+            self.XB_SUP[7],
+            self.XB_SUP[8],
+            self.XB_SUP[9],
+            self.XB_SUP[10],
+        ])
+
         self.max_mach_eval_sub = 0.99
         self.min_mach_eval_sup = 1.01
 
@@ -74,6 +94,43 @@ class DesignVariables(object):
 
         return self.reverse_variable_change([float(config.MACH_NUMBER), float(config.REYNOLDS_NUMBER), float(config.AoA), float(config.BODY_FLAP_DEF), float(config.ELEVON_DEF), float(config.DV1),
         float(config.DV2), float(config.DV3), float(config.DV4), float(config.DV5), float(config.DV6)])
+
+    def unpack_structure(self, config, dvs):
+
+        config_dvs = self.forward_variable_change([dvs[0],dvs[1],dvs[2],0.0,0.0,dvs[8],dvs[9],dvs[10],dvs[11],dvs[12],dvs[13]])
+
+        config.MACH_NUMBER = str(config_dvs[0]); config.REYNOLDS_NUMBER = str(config_dvs[1]); config.AoA= str(config_dvs[2])
+        config.BODY_FLAP_DEF = str(config_dvs[3]); config.ELEVON_DEF = str(config_dvs[4])
+        config.DV1 = str(config_dvs[5]); config.DV2 = str(config_dvs[6]); config.DV3 = str(config_dvs[7]); config.DV4 = str(config_dvs[8]); config.DV5 = str(config_dvs[9]); config.DV6 = str(config_dvs[10])
+
+        config.ACCELERATION_X = str(dvs[3]) # dv_nx
+        config.ACCELERATION_Y = 0.0         # dv_ny
+        config.ACCELERATION_Z = str(dvs[4]) # dv_nz
+        config.THRUST         = str(dvs[5]) # dv_thrust     [N]
+        config.P_DYN_INF      = str(dvs[6]) # dv_pdyn      [Pa]
+        config.FUEL_MASS      = str(dvs[7]) # dv_fuel_mass [kg]
+
+    def pack_structure(self, config):
+
+        dvs = self.reverse_variable_change([float(config.MACH_NUMBER), float(config.REYNOLDS_NUMBER), float(config.AoA), float(config.BODY_FLAP_DEF), float(config.ELEVON_DEF), float(config.DV1),
+        float(config.DV2), float(config.DV3), float(config.DV4), float(config.DV5), float(config.DV6)])
+
+        return [
+            dvs[0],
+            dvs[1],
+            dvs[2],
+            float(config.ACCELERATION_X),       # dv_nx
+            float(config.ACCELERATION_Z),       # dv_nz
+            float(config.THRUST),               # dv_thrust     [N]
+            float(config.P_DYN_INF),            # dv_pdyn      [Pa]
+            float(config.FUEL_MASS),            # dv_fuel_mass [kg]
+            dvs[5],
+            dvs[6],
+            dvs[7],
+            dvs[8],
+            dvs[9],
+            dvs[10]
+        ]
 
     def forward_variable_change(self, dvs):
 

@@ -170,9 +170,11 @@ class Project(object):
                 with redirect_folder(design_container.folder,pull,link,force=True):
                     konfig.dump('config_DSN.cfg')
 
-                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
-                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+#                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
+#                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
 
+#                    proc = spaceeval.eval_design(args[0], konfig)
+                    proc = 0
                     # proc = Process(target=spaceeval.eval_design, args=(args[0], config))
                     # proc.start()
 
@@ -188,8 +190,11 @@ class Project(object):
 
             else:
                 with redirect_folder(design_container.folder,force=False):
-                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
-                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+#                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
+#                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+
+                    proc = spaceeval.eval_design(args[0], konfig)
+
 
         # done, return output
         return proc
@@ -290,6 +295,7 @@ class Project(object):
                 if ((design_container.design is None) or force):
                     design_filename = os.path.join(design_container.folder,'design.pkl')
                     if os.path.exists(design_filename):
+                        print design_filename
                         design = spaceio.load_data(design_filename)
                         if update_name:
                             design.folder = design_container.folder.split('/')[-1]
