@@ -52,7 +52,7 @@ def eval_design(func_name, config):
 
 
 
-    load_models = False
+    load_models = True
 
     if load_models:
 

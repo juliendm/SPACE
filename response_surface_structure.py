@@ -23,6 +23,8 @@ def main():
                       help="read config from FILE", metavar="FILE")
     parser.add_option("-p", "--project", dest="project_folder",
                       help="project folder", metavar="PROJECT_FOLDER")
+    parser.add_option("-r", "--regime", dest="regime", default="ON"
+                      help="regime", metavar="REGIME")
     parser.add_option("-i", "--initiate", dest="initiate", default="False",
                       help="initiate", metavar="INITIATE")
     parser.add_option("-n", "--partitions", dest="partitions", default=2,
@@ -35,6 +37,7 @@ def main():
 
     response_surface( options.filename       ,
                       options.project_folder ,
+                      options.regime         ,
                       options.initiate       ,
                       options.partitions  )
 
@@ -42,6 +45,7 @@ def main():
 
 def response_surface( filename          ,
                       project_folder    ,
+                      regime = 'ON'     ,
                       initiate = False  ,
                       partitions  = 0  ):
 
@@ -58,69 +62,177 @@ def response_surface( filename          ,
 
     print '%d design(s) so far' % len(project.designs)
 
-    konfig = copy.deepcopy(config)
-    konfig.NUMBER_PART = 0
+    config.NUMBER_PART = 0
 
     # Design Variables
-
     desvar = DesignVariables()
 
+    # Load All Aero Models
+    #load_aero_models()
 
-    XB = desvar.XB_STRUCT
 
-    nd = 300
-    dvs_struct_filename = 'dvs_struct.dat'
+    if regime == 'ON':
+        XB = desvar.XB_STRUCT_ON
+        ndim_struct = desvar.ndim_struct_on
+        unpack_structure = desvar.unpack_structure_on
+        pack_structure = desvar.pack_structure_on
+    elif regime == 'OFF':
+        XB = desvar.XB_STRUCT_OFF
+        unpack_structure = desvar.unpack_structure_off
+        pack_structure = desvar.pack_structure_off
 
-    # X = LHC_unif(XB,nd)
-    # np.savetxt(dvs_struct_filename,X)
+    if initiate:
 
-    X = np.loadtxt(dvs_struct_filename)
+        nd = ndim_struct * 10
+        dvs_struct_filename = 'dvs_struct_' + regime + '.dat'
 
-    # # Load All Models
+        # X = LHC_unif(XB,nd)
+        # np.savetxt(dvs_struct_filename,X)
 
-    # n_models = 2180
+        X = np.loadtxt(dvs_struct_filename)
 
-    # models_folder = 'RESPONSE_SURFACE_DV_SUP/DESIGNS/MODELS'
+        for index in range(nd):
 
-    # for index in range(n_models):
-    #     cp_model = Surfpack('CP_%05d' % (index+1), desvar.ndim)
-    #     cp_model.load_model(os.path.join(models_folder,'model_cp_%05d.sps' % (index+1)))
+            dvs = X[index]
 
-    # for index in range(n_models):
-    #     cfx_model = Surfpack('CFX_%05d' % (index+1), desvar.ndim)
-    #     cfx_model.load_model(os.path.join(models_folder,'model_cfx_%05d.sps' % (index+1)))
+            konfig = copy.deepcopy(config)
+            unpack_structure(konfig, dvs)
 
-    # for index in range(n_models):
-    #     cfy_model = Surfpack('CFY_%05d' % (index+1), desvar.ndim)
-    #     cfy_model.load_model(os.path.join(models_folder,'model_cfy_%05d.sps' % (index+1)))
+            proc = project.func('STRUCTURE', konfig)
 
-    # for index in range(n_models):
-    #     cfz_model = Surfpack('CFZ_%05d' % (index+1), desvar.ndim)
-    #     cfz_model.load_model(os.path.join(models_folder,'model_cfz_%05d.sps' % (index+1)))
+            # force_redo_dsn_folder = None #'DSN_001'
+            # proc = project.func('STRUCTURE', konfig, force_redo_dsn_folder)
 
-    # Compute Structure
+            proc.wait()
 
-    number_dsn = 15
+    else:
 
-#    for index in range(number_dsn*10-1,number_dsn*10+9):
-    for index in [partitions-1]:
+        na = 20
 
-        dvs = X[index]
+#        flag = 'DRY_MASS'     # WHICH ONE ???????
+        flag = 'STRUCTURE_MASS'
 
-        # dvs = [1.1,0.2450089127,0.866,0.806527,-1.804901,338617.115272,13415.473225,22250,-0.5,0.5,0.5,0.0,0.0,0.0] # ~ DSN_003_A1
+        threshold = 1.0001
 
-        desvar.unpack_structure(konfig, dvs)
+        build_points_folder = os.path.join(project_folder,'BUILD_POINTS')
 
-        proc = project.func('AERODYNAMICS', konfig)
+        model = Surfpack(flag, ndim_struct)
+        model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
 
-        # force_redo_dsn_folder = None #'DSN_001'
-        # proc = project.func('STRUCTURE', konfig, force_redo_dsn_folder)
+        for ite in range(na):
 
-        #proc.wait()
+            print 'Ite:', ite
+            model.build('kriging')
+            print 'Model built'
 
+            # NEW POINTS
+
+            new_dvs_vec = model.max_variance(XB, number = 12)
+
+            # COMPUTE
+
+            procs = []
+
+            number_design_before = len(project.designs)
+
+            for new_dvs in new_dvs_vec:
+
+                print 'New dvs: ', new_dvs
+
+                konfig = copy.deepcopy(config)
+                unpack_structure(konfig, new_dvs)
+
+                proc = project.func('STRUCTURE', konfig)
+                procs.append(proc)
+
+            for proc in procs:
+                proc.wait()
+
+            number_design_after = len(project.designs)
+
+            # READ RESULTS
+
+            for dsn_index in range(number_design_before,number_design_after):
+
+                design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
+
+                history_file_name = os.path.join(design_folder,'STRUCTURE/history_structure.dat')
+                postpro_file_name = os.path.join(design_folder,'STRUCTURE/postpro_load_1.dat')
+                mass_file_name = os.path.join(design_folder,'STRUCTURE/lc0_mass_member.dat') # TO CHECK IF DONE INDEED
+
+                if os.path.exists(history_file_name) and os.path.exists(postpro_file_name) and os.path.exists(mass_file_name):
+
+                    history = numpy.loadtxt(history_file_name,delimiter=',',skiprows=1)
+
+                    half_structure_mass = history[-1,1]
+
+                    with open(postpro_file_name) as fp:
+                        for i, line in enumerate(fp):
+                            if i == 3:
+                                half_dry_mass = float(line.split(':')[-1])
+                            elif i > 3:
+                                break
+
+                    # ADD VALUE
+
+                    check = history[-1,2:5]
+                    if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
+
+                        local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
+                        local_dvs = pack_structure(local_config)
+
+
+                    if flag == 'STRUCTURE_MASS':
+                        model.add(local_dvs, half_structure_mass)
+                    elif flag == 'DRY_MASS':
+                        model.add(local_dvs, half_dry_mass)
+
+
+                    else:
+                        print 'Warning:', dsn_index+1
+                else:
+                    print 'Missing:', dsn_index+1
+
+
+            model.save_data(os.path.join(build_points_folder,'enriched_points_' + flag + '.dat'))
+
+
+        # Save Model
+
+        model.build('kriging')
+        model.save_model(os.path.join(project_folder,'model_' + flag + '.sps'))
 
 
 #: response_surface()
+
+
+
+
+def load_aero_models():
+
+    n_models = 2180
+
+    models_folder = 'RESPONSE_SURFACE_DV_SUP/DESIGNS/MODELS'
+
+    for index in range(n_models):
+        cp_model = Surfpack('CP_%05d' % (index+1), desvar.ndim)
+        cp_model.load_model(os.path.join(models_folder,'model_cp_%05d.sps' % (index+1)))
+
+    for index in range(n_models):
+        cfx_model = Surfpack('CFX_%05d' % (index+1), desvar.ndim)
+        cfx_model.load_model(os.path.join(models_folder,'model_cfx_%05d.sps' % (index+1)))
+
+    for index in range(n_models):
+        cfy_model = Surfpack('CFY_%05d' % (index+1), desvar.ndim)
+        cfy_model.load_model(os.path.join(models_folder,'model_cfy_%05d.sps' % (index+1)))
+
+    for index in range(n_models):
+        cfz_model = Surfpack('CFZ_%05d' % (index+1), desvar.ndim)
+        cfz_model.load_model(os.path.join(models_folder,'model_cfz_%05d.sps' % (index+1)))
+
+
+#: load_models()
+
 
 
 # -------------------------------------------------------------------

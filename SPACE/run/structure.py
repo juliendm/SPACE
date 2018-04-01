@@ -42,7 +42,7 @@ def structure(config):
 
     # Initial Guess
 
-    ini_half_mass_guess = 20000 # kg
+
 
 
 
@@ -55,8 +55,10 @@ def structure(config):
     if not os.path.exists(konfig.FLUID_SURFACE + '.sol'): os.symlink(konfig.FLUID_SURFACE_FLOW + '.sol', konfig.FLUID_SURFACE + '.sol')
 
     SPACE_INT(konfig)
+
     load = spaceutil.Load(konfig, load_filename)
-    load.update(ini_half_mass_guess)
+    load.update(0.5*float(konfig.DRY_MASS))
+
     loads.append(load)
 
 
@@ -312,21 +314,25 @@ def computeTacs(config, loads):
         FEASolver.setDesignVars(x)
 
         ################################################################################
-        max_half_wet_mass = 0.0
+        max_half_dry_mass = 0.0
         for i in range(numLoadCases):
 
             #current_dvs = x['struct']
             current_dvs = x
 
             loads[i].postprocess(current_dvs, corresp) # Update load._structure_mass and load._additional_mass
-            half_wet_mass = loads[i]._half_structure_mass                                  \
-                          + loads[i]._half_additional_mass                                 \
-                          + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_lox   \
-                          + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_kero  # Add consumed fuel
-            if (half_wet_mass > max_half_wet_mass): max_half_wet_mass = half_wet_mass
-        for i in range(numLoadCases):
-            loads[i].update(max_half_wet_mass)        # max_half_wet_mass supposed to be the same for all cases
-            SPs[i].loadFile = loads[i]._load_filename # Reset loadFile to read it again
+
+            # half_wet_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass + (1.0-loads[i]._fuel_percentage)*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
+            # half_dry_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass - loads[i]._half_mass_payload - loads[i]._fuel_percentage*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
+
+            # if (half_dry_mass > max_half_dry_mass): max_half_dry_mass = half_dry_mass
+
+        # # THE FOLLOWING IS NOT NEED WITH THE CONCEPT OF VIRTUAL MASS
+
+        # for i in range(numLoadCases):
+        #     loads[i].update(max_half_dry_mass)        # max_half_dry_mass supposed to be the same for all cases
+        #     SPs[i].loadFile = loads[i]._load_filename # Reset loadFile to read it again
+
         ################################################################################
 
         for i in range(numLoadCases):

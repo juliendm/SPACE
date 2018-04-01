@@ -127,10 +127,10 @@ class Surfpack(object):
 
             vec = []
             for index in range(number*10):
-                print index
+                print index+1, ' so far: ', len(vec)
                 [YI_min,X_min,Info] = opt_ALPSO(prob)
                 [YI_min,X_min,Info] = opt_SLSQP(prob.solution(index),sens_type='FD')
-                if not is_already_in(X_min,vec): vec.append(X_min.tolist())
+                if not is_already_in(X_min,vec) and is_in(X_min,XB): vec.append(X_min.tolist())
                 if len(vec) >= number: break
 
         if len(vec) == 1: return vec[0]
