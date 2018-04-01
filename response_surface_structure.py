@@ -78,6 +78,7 @@ def response_surface( filename          ,
         pack_structure = desvar.pack_structure_on
     elif regime == 'OFF':
         XB = desvar.XB_STRUCT_OFF
+        ndim_struct = desvar.ndim_struct_off
         unpack_structure = desvar.unpack_structure_off
         pack_structure = desvar.pack_structure_off
 
@@ -181,12 +182,10 @@ def response_surface( filename          ,
                         local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
                         local_dvs = pack_structure(local_config)
 
-
-                    if flag == 'STRUCTURE_MASS':
-                        model.add(local_dvs, half_structure_mass)
-                    elif flag == 'DRY_MASS':
-                        model.add(local_dvs, half_dry_mass)
-
+                        if flag == 'STRUCTURE_MASS':
+                            model.add(local_dvs, half_structure_mass)
+                        elif flag == 'DRY_MASS':
+                            model.add(local_dvs, half_dry_mass)
 
                     else:
                         print 'Warning:', dsn_index+1
