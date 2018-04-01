@@ -23,7 +23,7 @@ def main():
                       help="read config from FILE", metavar="FILE")
     parser.add_option("-p", "--project", dest="project_folder",
                       help="project folder", metavar="PROJECT_FOLDER")
-    parser.add_option("-r", "--regime", dest="regime", default="ON",
+    parser.add_option("-r", "--regime", dest="regime", default="ON"
                       help="regime", metavar="REGIME")
     parser.add_option("-i", "--initiate", dest="initiate", default="False",
                       help="initiate", metavar="INITIATE")
