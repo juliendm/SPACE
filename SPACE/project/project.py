@@ -191,10 +191,11 @@ class Project(object):
 
             else:
                 with redirect_folder(design_container.folder,force=False):
-#                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
-#                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
 
-                    proc = spaceeval.eval_design(args[0], konfig)
+                    Command = 'python2.7 ' + SPACE_RUN + '/SPACE/eval/design_interface.py ' + args[0]
+                    proc = subprocess.Popen(Command, shell=True, stdout=sys.stdout, stderr=subprocess.PIPE)
+
+                    # proc = spaceeval.eval_design(args[0], konfig)
 
 
         # done, return output
@@ -236,12 +237,12 @@ class Project(object):
         konfig = copy.deepcopy(config)
         
         # find closest design
-        # closest,delta = self.closest_design(konfig)
+        closest,delta = self.closest_design(konfig)
         # found existing design
 
         # IMPROVE
-        closest = None
-        delta = 1e8
+        # closest = None
+        # delta = 1e8
 
         if delta == 0.0 and closest:
             design_container = closest
@@ -263,8 +264,8 @@ class Project(object):
                 
         designs = self.designs
         
-        keys_check = ['MACH_NUMBER','AoA','DV1','DV2','DV3']
-        
+        keys_check = ['MACH_NUMBER','REYNOLDS_NUMBER','AoA','BODY_FLAP_DEF','ELEVON_DEF','DV1','DV2','DV3','DV4','DV5','DV6','DRY_MASS','FUEL_MASS','THRUST','P_DYN_INF']
+
         if not designs: 
             return [] , inf
         
@@ -274,6 +275,9 @@ class Project(object):
                 this_config = this_design_container.design.config
                 distance = config.dist(this_config,keys_check)
                 diffs.append(distance)
+        
+        if not diffs: 
+            return [] , inf
         
         # pick closest design
         i_min = np.argmin(diffs)

@@ -65,7 +65,7 @@ class DesignVariables(object):
             [ 5.0e3,  30.0e3],    # dv_dry_mass   [kg]
             [ 0.0,    26.0e3],       # dv_fuel_mass  [kg]    # WARNING: THIS HAS TO BE CONSISTENT WITH MAX_FUEL_MASS IN CONFIG FILE
             [ 0.1e6,   3.0e6],     # dv_thrust      [N]
-            [ 0.0,    35.0e3],       # dv_pdyn       [Pa]
+            [ 1.0e-6,    35.0e3],       # dv_pdyn       [Pa]
             self.XB_SUP[5],
             self.XB_SUP[6],
             self.XB_SUP[7],

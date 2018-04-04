@@ -120,6 +120,18 @@ def response_surface( filename          ,
         model = Surfpack(flag, ndim_struct)
         model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
 
+        next_dvs_vec_filename = 'next_dvs_vec_' + regime + '.dat'
+
+        # new_dvs_vec = []
+        # for dsn_index in range(12):
+        #     design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
+        #     local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
+        #     local_dvs = pack_structure(local_config)
+        #     new_dvs_vec.append(local_dvs)
+        # np.savetxt(next_dvs_vec_filename, new_dvs_vec)
+
+        print 'Begin Iterating:'
+
         for ite in range(na):
 
             print 'Ite:', ite
@@ -128,7 +140,14 @@ def response_surface( filename          ,
 
             # NEW POINTS
 
-            new_dvs_vec = model.max_variance(XB, number = 12)
+            if ite == 0:
+
+                new_dvs_vec = np.loadtxt(next_dvs_vec_filename)
+
+            else:
+
+                new_dvs_vec = model.max_variance(XB, number = 12)
+                np.savetxt(next_dvs_vec_filename, new_dvs_vec)
 
             # COMPUTE
 

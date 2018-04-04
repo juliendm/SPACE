@@ -277,8 +277,13 @@ def aerodynamics_kriging(config, state=None):
 
 
 
-
     # redundancy check
+
+    if not state.FILES.has_key('FLUID_SURFACE_FLOW'):
+        fluid_surface_flow_filename = config.FLUID_SURFACE_FLOW + '.sol'
+        if os.path.exists(fluid_surface_flow_filename):
+            state.FILES.FLUID_SURFACE_FLOW = fluid_surface_flow_filename
+
     aerodynamics_kriging_done = all( [ state.FILES.has_key(key) for key in ['FLUID_SURFACE_FLOW'] ] )
 
 
@@ -296,6 +301,37 @@ def aerodynamics_kriging(config, state=None):
                     n_models = 2180
 
                     desvar = DesignVariables()
+
+
+
+                    load_models = True
+
+                    if load_models:
+
+                        models_folder = '../../../../RESPONSE_SURFACE_DV_SUP/DESIGNS/MODELS'
+
+                        for index in range(n_models):
+                            cp_model = Surfpack('CP_%05d' % (index+1), desvar.ndim)
+                            cp_model.load_model(os.path.join(models_folder,'model_cp_%05d.sps' % (index+1)))
+
+                        for index in range(n_models):
+                            cfx_model = Surfpack('CFX_%05d' % (index+1), desvar.ndim)
+                            cfx_model.load_model(os.path.join(models_folder,'model_cfx_%05d.sps' % (index+1)))
+
+                        for index in range(n_models):
+                            cfy_model = Surfpack('CFY_%05d' % (index+1), desvar.ndim)
+                            cfy_model.load_model(os.path.join(models_folder,'model_cfy_%05d.sps' % (index+1)))
+
+                        for index in range(n_models):
+                            cfz_model = Surfpack('CFZ_%05d' % (index+1), desvar.ndim)
+                            cfz_model.load_model(os.path.join(models_folder,'model_cfz_%05d.sps' % (index+1)))
+
+
+
+
+
+
+
                     model = Surfpack('placeholder', desvar.ndim)
                     dvs = desvar.pack(config)
 
@@ -432,6 +468,28 @@ def geometry(config, state=None):
     # ----------------------------------------------------    
 
     # redundancy check
+
+    if not state.FILES.has_key('STRUCT_BDF'):
+        struct_bdf_filename = config.STRUCT + '.bdf'
+        if os.path.exists(struct_bdf_filename):
+            state.FILES.STRUCT_BDF = struct_bdf_filename
+    if not state.FILES.has_key('STRUCT_MESH'):
+        struct_mesh_filename = config.STRUCT + '.mesh'
+        if os.path.exists(struct_mesh_filename):
+            state.FILES.STRUCT_MESH = struct_mesh_filename
+    if not state.FILES.has_key('STRUCT_SURFACE_MESH'):
+        struc_surface_mesh_filename = config.STRUCT + '_surface.mesh'
+        if os.path.exists(struc_surface_mesh_filename):
+            state.FILES.STRUCT_SURFACE_MESH = struc_surface_mesh_filename
+    if not state.FILES.has_key('FLUID_SURFACE_MESH'):
+        fluid_surface_mesh_filename = config.FLUID_SURFACE + '.mesh'
+        if os.path.exists(fluid_surface_mesh_filename):
+            state.FILES.FLUID_SURFACE_MESH = fluid_surface_mesh_filename
+    if not state.FILES.has_key('FLUID_SURFACE_BACK_MESH'):
+        fluid_surface_back_mesh_filename = config.FLUID_SURFACE + '_back.mesh'
+        if os.path.exists(fluid_surface_back_mesh_filename):
+            state.FILES.FLUID_SURFACE_BACK_MESH = fluid_surface_back_mesh_filename
+
     if config.STRUCT == 'NONE':
         geometry_done = all( [ state.FILES.has_key(key) for key in ['FLUID_SURFACE_MESH','FLUID_SURFACE_BACK_MESH'] ] )
     else:

@@ -225,12 +225,22 @@ class Config(ordered_bunch):
                 val1 = konfig_diff[key][0]
                 val2 = konfig_diff[key][1]
                 
-                if key in ['MACH_NUMBER','AoA','DV_VALUE_NEW',
-                           'DV_VALUE_OLD']:
+                if key in ['DV_VALUE_NEW','DV_VALUE_OLD']:
+
                     val1 = np.array( val1 )
                     val2 = np.array( val2 )
+
+
                     this_diff = np.sqrt( np.sum( (val1-val2)**2 ) )
                 
+                elif key in ['MACH_NUMBER','REYNOLDS_NUMBER','AoA','BODY_FLAP_DEF','ELEVON_DEF','DV1','DV2','DV3','DV4','DV5','DV6','DRY_MASS','FUEL_MASS','THRUST','P_DYN_INF']:
+
+                    val1 = float( val1 )
+                    val2 = float( val2 )
+
+
+                    this_diff = np.sqrt( np.sum( (val1-val2)**2 ) )
+
                 else:
                     print 'Warning, unexpected config difference'
                     this_diff = inf
