@@ -109,6 +109,7 @@ def response_surface( filename          ,
     else:
 
         na = 20
+        number_per_ite = 12
 
 #        flag = 'DRY_MASS'     # WHICH ONE ???????
         flag = 'STRUCTURE_MASS'
@@ -119,6 +120,7 @@ def response_surface( filename          ,
 
         model = Surfpack(flag, ndim_struct)
         model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
+        exclude = []
 
         next_dvs_vec_filename = 'next_dvs_vec_' + regime + '.dat'
 
@@ -146,8 +148,10 @@ def response_surface( filename          ,
 
             else:
 
-                new_dvs_vec = model.max_variance(XB, number = 12)
+                new_dvs_vec = model.max_variance(XB, number = number_per_ite, exclude = exclude)
                 np.savetxt(next_dvs_vec_filename, new_dvs_vec)
+
+            effective_number_per_ite = len(new_dvs_vec)
 
             # COMPUTE
 
@@ -172,7 +176,13 @@ def response_surface( filename          ,
 
             # READ RESULTS
 
-            for dsn_index in range(number_design_before,number_design_after):
+
+#            for dsn_index in range(number_design_after-effective_number_per_ite,number_design_after):
+
+            model = Surfpack(flag + '_' + str(ite), ndim_struct)
+            model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
+            exclude = []
+            for dsn_index in range(0,number_design_after):
 
                 design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
 
@@ -182,31 +192,25 @@ def response_surface( filename          ,
 
                 if os.path.exists(history_file_name) and os.path.exists(postpro_file_name) and os.path.exists(mass_file_name):
 
-                    history = numpy.loadtxt(history_file_name,delimiter=',',skiprows=1)
+                    history = np.loadtxt(history_file_name,delimiter=',',skiprows=1)
 
                     half_structure_mass = history[-1,1]
 
-                    with open(postpro_file_name) as fp:
-                        for i, line in enumerate(fp):
-                            if i == 3:
-                                half_dry_mass = float(line.split(':')[-1])
-                            elif i > 3:
-                                break
+                    local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
+                    local_dvs = pack_structure(local_config)
 
                     # ADD VALUE
 
                     check = history[-1,2:5]
                     if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
 
-                        local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
-                        local_dvs = pack_structure(local_config)
-
                         if flag == 'STRUCTURE_MASS':
                             model.add(local_dvs, half_structure_mass)
                         elif flag == 'DRY_MASS':
-                            model.add(local_dvs, half_dry_mass)
+                            raise ValueError('Do not use, not correctly defined')
 
                     else:
+                        exclude.append(local_dvs)
                         print 'Warning:', dsn_index+1
                 else:
                     print 'Missing:', dsn_index+1

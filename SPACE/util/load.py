@@ -263,7 +263,7 @@ class Load(object):
         # Masses
 
         half_wet_mass = self._half_structure_mass + self._half_additional_mass + (1.0-self._fuel_percentage)*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)
-        half_dry_mass = self._half_structure_mass + self._half_additional_mass - self._half_mass_payload - self._fuel_percentage*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)
+        half_dry_mass = self._half_structure_mass + self._half_additional_mass - self._fuel_percentage*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)
 
         # pitch_moment_elem = 0.0
         # for iElem_bdf in range(self._nElem_bdf):                             # Contribution of this - is nul if cog computed without additional masses (so external forces cancel out by themselves)

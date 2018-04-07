@@ -323,7 +323,7 @@ def computeTacs(config, loads):
             loads[i].postprocess(current_dvs, corresp) # Update load._structure_mass and load._additional_mass
 
             # half_wet_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass + (1.0-loads[i]._fuel_percentage)*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
-            # half_dry_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass - loads[i]._half_mass_payload - loads[i]._fuel_percentage*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
+            # half_dry_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass - loads[i]._fuel_percentage*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
 
             # if (half_dry_mass > max_half_dry_mass): max_half_dry_mass = half_dry_mass
 
