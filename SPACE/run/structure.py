@@ -13,9 +13,9 @@ from mpi4py import MPI
 from baseclasses import *
 from tacs import *
 
-from pyOpt import *
-from pyOpt import SNOPT
-#from pyoptsparse import *
+# from pyOpt import *
+# from pyOpt import SNOPT
+from pyoptsparse import *
 
 # from .. import io   as spaceio
 # from .. import util as spaceutil
@@ -56,8 +56,17 @@ def structure(config):
 
     SPACE_INT(konfig)
 
-    load = spaceutil.Load(konfig, load_filename)
-    load.update(0.5*float(konfig.DRY_MASS))
+
+    if konfig.has_key('REGIME'):
+        load = spaceutil.Load(konfig, load_filename, regime = konfig.REGIME)
+    else:
+        load = spaceutil.Load(konfig, load_filename, regime = 'BOTH')
+
+    if load._regime == 'BOTH':
+        ini_half_mass_guess = 20000 # kg
+        load.update(ini_half_mass_guess)
+    else:
+        load.update(0.5*float(konfig.DRY_MASS))
 
     loads.append(load)
 
@@ -314,24 +323,34 @@ def computeTacs(config, loads):
         FEASolver.setDesignVars(x)
 
         ################################################################################
-        max_half_dry_mass = 0.0
+
         for i in range(numLoadCases):
 
-            #current_dvs = x['struct']
-            current_dvs = x
+            if loads[i]._regime == 'BOTH':
+                max_half_wet_mass = 0.0
+            else:
+                max_half_dry_mass = 0.0
+
+            current_dvs = x['struct']
+            # current_dvs = x
 
             loads[i].postprocess(current_dvs, corresp) # Update load._structure_mass and load._additional_mass
 
-            # half_wet_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass + (1.0-loads[i]._fuel_percentage)*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
-            # half_dry_mass = loads[i]._half_structure_mass + loads[i]._half_additional_mass - loads[i]._fuel_percentage*(loads[i]._half_mass_fuel_kero+loads[i]._half_mass_fuel_lox)
+            if loads[i]._regime == 'BOTH':
 
-            # if (half_dry_mass > max_half_dry_mass): max_half_dry_mass = half_dry_mass
+                half_wet_mass = loads[i]._half_structure_mass                                  \
+                              + loads[i]._half_additional_mass                                 \
+                              + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_lox   \
+                              + (1.0-loads[i]._fuel_percentage)*loads[i]._half_mass_fuel_kero  # Add consumed fuel
+                if (half_wet_mass > max_half_wet_mass): max_half_wet_mass = half_wet_mass
 
-        # # THE FOLLOWING IS NOT NEED WITH THE CONCEPT OF VIRTUAL MASS
+        # THE FOLLOWING IS NOT NEED WITH THE CONCEPT OF VIRTUAL MASS
 
-        # for i in range(numLoadCases):
-        #     loads[i].update(max_half_dry_mass)        # max_half_dry_mass supposed to be the same for all cases
-        #     SPs[i].loadFile = loads[i]._load_filename # Reset loadFile to read it again
+        for i in range(numLoadCases):
+
+            if loads[i]._regime == 'BOTH':
+                loads[i].update(max_half_wet_mass)        # max_half_wet_mass supposed to be the same for all cases
+                SPs[i].loadFile = loads[i]._load_filename # Reset loadFile to read it again
 
         ################################################################################
 
@@ -349,59 +368,59 @@ def computeTacs(config, loads):
             history_file.close()
             history_iteration['val'] += 1
 
-        # return funcs, False
+        return funcs, False
 
-        f = 0
-        g = []
-        for i in range(numLoadCases):
-                for name in evalFuncs:
-                    if 'mass' in name:
-                        obj_name = '%s_%s' % (SPs[i].name, name)
-                        if obj_name == 'lc0_mass':
-                            f = funcs[obj_name]
-                    if 'ksf' in name:
-                        con_name = '%s_%s' % (SPs[i].name, name)
-                        g.append(funcs[con_name])
-                    if 'ksb' in name:
-                        con_name = '%s_%s' % (SPs[i].name, name)
-                        g.append(funcs[con_name])
-                    if 'ad' in name:
-                        con_name = '%s_%s' % (SPs[i].name, name)
-                        g.append(funcs[con_name])
-        fail = 0
-        return f, g, fail
+        # f = 0
+        # g = []
+        # for i in range(numLoadCases):
+        #         for name in evalFuncs:
+        #             if 'mass' in name:
+        #                 obj_name = '%s_%s' % (SPs[i].name, name)
+        #                 if obj_name == 'lc0_mass':
+        #                     f = funcs[obj_name]
+        #             if 'ksf' in name:
+        #                 con_name = '%s_%s' % (SPs[i].name, name)
+        #                 g.append(funcs[con_name])
+        #             if 'ksb' in name:
+        #                 con_name = '%s_%s' % (SPs[i].name, name)
+        #                 g.append(funcs[con_name])
+        #             if 'ad' in name:
+        #                 con_name = '%s_%s' % (SPs[i].name, name)
+        #                 g.append(funcs[con_name])
+        # fail = 0
+        # return f, g, fail
 
 
 
     # Sensitivies
-    #def sens(x, funcs):
-    def sens(x, f, g):
+    def sens(x, funcs):
+    # def sens(x, f, g):
         '''Evaluate the objective and constraint sensitivities'''
         funcsSens = {}
         for i in range(numLoadCases):
             FEASolver.evalFunctionsSens(SPs[i], funcsSens)
 
-        # return funcsSens, False
+        return funcsSens, False
 
-        df = []
-        dg = []
-        for i in range(numLoadCases):
-                for name in evalFuncs:
-                    if 'mass' in name:
-                        obj_name = '%s_%s' % (SPs[i].name, name)
-                        if obj_name == 'lc0_mass':
-                            df = funcsSens[obj_name][FEASolver.varSet].tolist()
-                    if 'ksf' in name:
-                        con_name = '%s_%s' % (SPs[i].name, name)
-                        dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
-                    if 'ksb' in name:
-                        con_name = '%s_%s' % (SPs[i].name, name)
-                        dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
-                    if 'ad' in name:
-                        con_name = '%s_%s' % (SPs[i].name, name)
-                        dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
-        fail = 0
-        return df, dg, fail
+        # df = []
+        # dg = []
+        # for i in range(numLoadCases):
+        #         for name in evalFuncs:
+        #             if 'mass' in name:
+        #                 obj_name = '%s_%s' % (SPs[i].name, name)
+        #                 if obj_name == 'lc0_mass':
+        #                     df = funcsSens[obj_name][FEASolver.varSet].tolist()
+        #             if 'ksf' in name:
+        #                 con_name = '%s_%s' % (SPs[i].name, name)
+        #                 dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
+        #             if 'ksb' in name:
+        #                 con_name = '%s_%s' % (SPs[i].name, name)
+        #                 dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
+        #             if 'ad' in name:
+        #                 con_name = '%s_%s' % (SPs[i].name, name)
+        #                 dg.append(funcsSens[con_name][FEASolver.varSet].tolist())
+        # fail = 0
+        # return df, dg, fail
 
     # Set up the optimization problem
 
@@ -452,19 +471,7 @@ def computeTacs(config, loads):
 
     # Solve
 
-    # opt = OPT('snopt',options={
-    #     'Major feasibility tolerance':1e-6,
-    #     'Major optimality tolerance':1e-6,
-    #     'Minor feasibility tolerance':1e-6,
-    #     'Iterations limit':100000,
-    #     'Major iterations limit':1000,
-    #     'Minor iterations limit':500,
-    #     'Major step limit':2.0})
-
-    # sol = opt(optProb, sens=sens)
-
-
-    snopt = SNOPT(options={
+    opt = OPT('snopt',options={
         'Major feasibility tolerance':1e-6,
         'Major optimality tolerance':1e-6,
         'Minor feasibility tolerance':1e-6,
@@ -472,7 +479,19 @@ def computeTacs(config, loads):
         'Major iterations limit':1000,
         'Minor iterations limit':500,
         'Major step limit':2.0})
-    [obj_fun, x_dvs, inform] = snopt(optProb, sens_type=sens)
+
+    sol = opt(optProb, sens=sens)
+
+
+    # snopt = SNOPT(options={
+    #     'Major feasibility tolerance':1e-6,
+    #     'Major optimality tolerance':1e-6,
+    #     'Minor feasibility tolerance':1e-6,
+    #     'Iterations limit':100000,
+    #     'Major iterations limit':1000,
+    #     'Minor iterations limit':500,
+    #     'Major step limit':2.0})
+    # [obj_fun, x_dvs, inform] = snopt(optProb, sens_type=sens)
 
 
 
@@ -1080,6 +1099,11 @@ def write_files(FEASolver, SP, corresp, load, print_tag):
         thickness_member = x_final[iMember]
         mass_member[iMember] += load._area_elem[iElem_bdf]*thickness_member*load._material_rho
 
+    area_member = [0.0 for iMember in range(len(x_final))]
+    for iElem_bdf in range(load._nElem_bdf):
+        iMember = corresp[load._elem_tag_bdf[iElem_bdf]-1]-1
+        area_member[iMember] += load._area_elem[iElem_bdf]
+
     write_sol_1('%s_struct_thickness.sol' % SP.name,thickness_point)
     disp = FEASolver.writeMeshDisplacements(SP, '%s_struct_disp.sol' % SP.name)
     force = FEASolver.writeMeshForces(SP, '%s_struct_force.sol' % SP.name)
@@ -1101,6 +1125,11 @@ def write_files(FEASolver, SP, corresp, load, print_tag):
     for iMember in range(len(mass_member)):
         mass_member_file.write('%f\n' % mass_member[iMember])
     mass_member_file.close()
+
+    area_member_file = open('%s_area_member.dat' % SP.name,'w')
+    for iMember in range(len(area_member)):
+        area_member_file.write('%f\n' % area_member[iMember])
+    area_member_file.close()
 
     load.postprocess(x_final, corresp)
 

@@ -63,25 +63,51 @@ def geometry ( config ):
     SPACE_SUR(konfig)
 
     # STRUCTURE
-    
+
+    produce = False
+
     if konfig.STRUCT != 'NONE':
 
-        pgm.structure = True
-        pgm.tail = True
+        if produce:
 
-        wing_width_section_1_ini = 1.54
-        wing_width_section_2_ini = 2.41
-        pgm.wing_width_section_1, pgm.wing_width_section_2 = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),
-            float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF),'struct')
+            pgm.structure = True
+            pgm.tail = True
 
-        bse = pgm.initialize()
+            wing_width_section_1_ini = 1.54
+            wing_width_section_2_ini = 2.41
+            pgm.wing_width_section_1, pgm.wing_width_section_2 = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),
+                float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF),'struct')
 
-        pgm.comps['lwing'].set_airfoil('profile_struct_1.dat')
-        pgm.comps['rwing'].set_airfoil('profile_struct_37.dat')
-        pgm.comps['flap'].set_airfoil('profile_cs.dat')
-        pgm.compute_all()
+            bse = pgm.initialize()
 
-        pgm.meshStructure(konfig.STRUCT)
+            pgm.comps['lwing'].set_airfoil('profile_struct_1.dat')
+            pgm.comps['rwing'].set_airfoil('profile_struct_37.dat')
+            pgm.comps['flap'].set_airfoil('profile_cs.dat')
+            pgm.compute_all()
+
+            pgm.meshStructure(konfig.STRUCT)
+
+        else:
+
+            struct_mesh_filename = SPACE_RUN + '/original_struct.mesh'
+            struct_surface_mesh_filename = SPACE_RUN + '/original_struct_surface.mesh'
+            struct_bdf_filename = SPACE_RUN + '/original_struct.bdf'
+
+            coord, bdf_corresp, pre, post = read_mesh(struct_mesh_filename)
+            new_coord = deform_mesh(konfig, coord)
+            struct_mesh_filename = konfig.STRUCT + '.mesh'
+            write_mesh(new_coord, bdf_corresp, pre, post, struct_mesh_filename)
+
+            coord_surf, bdf_corresp_surf, pre_surf, post_surf = read_mesh(struct_surface_mesh_filename)
+            new_coord_surf = deform_mesh(konfig, coord_surf)
+            struct_surface_mesh_filename = konfig.STRUCT + '_surface.mesh'
+            write_mesh(new_coord_surf, bdf_corresp_surf, pre_surf, post_surf, struct_surface_mesh_filename)
+
+            coord_bdf, pre_bdf, post_bdf = read_bdf(struct_bdf_filename)
+            new_coord_bdf = deform_mesh(konfig, coord_bdf)
+            struct_bdf_filename = konfig.STRUCT + '.bdf'
+            write_bdf(new_coord_bdf, pre_bdf, post_bdf, struct_bdf_filename)
+
 
     # info out
     info = spaceio.State()
@@ -92,6 +118,247 @@ def geometry ( config ):
         info.FILES.STRUCT_MESH = konfig.STRUCT + '.mesh'
         info.FILES.STRUCT_SURFACE_MESH = konfig.STRUCT + '_surface.mesh'
     return info
+
+def deform_mesh(config, coord):
+
+    shift = 0.5
+
+    dv_geo1 = float(config.DV1) + shift
+    dv_geo2 = float(config.DV2)
+    dv_geo3 = float(config.DV3)
+    dv_geo4 = float(config.DV4)
+    dv_geo5 = float(config.DV5)
+    dv_geo6 = float(config.DV6)
+
+    hinge_loc_ini = 12.35
+    body_flap_y_begin_loc = 1.9 #2.13
+    section_2_y_begin_loc = 3.23
+
+    wing_width_section_2_ini = 2.41;
+
+    x1 =  9.66630; y1 =  3.72044;
+    x2 = 10.56873; y2 =  5.59035;
+    a_lead = (x1-x2)/(y1-y2);
+    b_lead_ini = x1 - a_lead * y1;
+    b_lead = b_lead_ini + dv_geo1;
+
+    x1 = 1.87209; y1 =  1.51328;
+    x2 = a_lead * section_2_y_begin_loc + b_lead_ini; y2 =  section_2_y_begin_loc;
+    a_strake = (x1-x2)/(y1-y2);
+    b_strake = x1 - a_strake * y1;
+
+    a_trail = -0.0549317;
+    b_trail_ini = 13.984169525;
+    b_trail = b_trail_ini + dv_geo2 + dv_geo4;
+
+    wing_width_section_2 = wing_width_section_2_ini + dv_geo3;
+
+    hinge_loc = hinge_loc_ini + dv_geo4
+
+    bf_hinge_loc_ini = 15.50 # 15.77
+    bf_hinge_loc = bf_hinge_loc_ini + dv_geo6
+    bf_tip_loc_ini = 17.34
+    bf_tip_loc = bf_tip_loc_ini + dv_geo5 + dv_geo6
+    bf_z_lim = -1.7
+
+    for iPoint in range(len(coord)):
+
+        x = coord[iPoint][0]
+        y = coord[iPoint][1]
+        z = coord[iPoint][2]
+
+        x_lead_ini = a_lead * y + b_lead_ini
+        x_trail_ini = a_trail * y + b_trail_ini
+
+        # WING Y MOVEMENT (First)
+
+        if y > section_2_y_begin_loc:
+
+            new_y = (y-section_2_y_begin_loc) * (wing_width_section_2)/(wing_width_section_2_ini) + section_2_y_begin_loc
+
+        else:
+
+            new_y = y
+
+        # WING X MOMEVMENT
+
+        x_lead = a_lead * new_y + b_lead
+        x_trail = a_trail * new_y + b_trail
+        x_strake = a_strake * new_y + b_strake
+
+        if x > hinge_loc_ini and new_y > body_flap_y_begin_loc:
+
+            new_x = (x-hinge_loc_ini) * (x_trail-hinge_loc)/(x_trail_ini-hinge_loc_ini) + hinge_loc
+
+        elif x < hinge_loc_ini:
+
+            if new_y > section_2_y_begin_loc:
+
+                new_x = (x-hinge_loc_ini) * (x_lead-hinge_loc)/(x_lead_ini-hinge_loc_ini) + hinge_loc
+
+            elif new_y > body_flap_y_begin_loc:
+
+                new_x = (x-hinge_loc_ini) * (x_strake-hinge_loc)/(x_strake-hinge_loc_ini) + hinge_loc
+
+            else:
+
+                new_x = x
+
+        else:
+
+            new_x = x
+
+        # BF X MOVEMENT
+
+        if x > bf_hinge_loc_ini and z < bf_z_lim:
+
+            new_x = (x-bf_hinge_loc_ini) * (bf_tip_loc-bf_hinge_loc)/(bf_tip_loc_ini-bf_hinge_loc_ini) + bf_hinge_loc            
+
+
+        coord[iPoint][0] = new_x
+        coord[iPoint][1] = new_y
+
+    return coord
+
+def read_mesh(mesh_filename, nDim = 3, nNode = 4):
+
+    pre = []
+    post = []
+
+    # Read mesh
+
+    mesh = open(mesh_filename)
+    line = mesh.readline()
+    pre.append(line)
+    while not line.strip() == 'Vertices':
+        line = mesh.readline()
+        pre.append(line)
+    line = mesh.readline()
+    pre.append(line)
+    nPoint = int(line)
+    line = mesh.readline()
+    pre.append(line)
+
+    coord = [[0.0 for iDim in range(nDim)] for iPoint in range(nPoint)]
+    bdf_corresp = [0]*nPoint
+    for iPoint in range(nPoint):
+        data = mesh.readline().split()
+        coord[iPoint][0] = float(data[0])
+        coord[iPoint][1] = float(data[1])
+        coord[iPoint][2] = float(data[2])
+        bdf_corresp[iPoint] = int(data[3])-1
+
+    line = mesh.readline()
+    while line:
+        post.append(line)
+        line = mesh.readline()
+
+    mesh.close()
+
+    return coord, bdf_corresp, pre, post
+
+def read_bdf(mesh_filename, nDim = 3, nNode = 4):
+
+    # Read bdf
+    bdf = open(mesh_filename)
+
+    coord_bdf = []
+    pre_bdf = []
+    post_bdf = []
+
+    for line in bdf:
+        data = line.split()
+        if "BEGIN" in line:
+            pre_bdf.append(line)
+        elif (line[0]=="$" and len(data) == 3):
+            pre_bdf.append(line)
+        elif (line[0]=="G" and len(data) == 6):
+            vec = [float(data[3]), float(data[4].strip('*G'))]
+        elif (line[0]=="*" and len(data) == 5):
+            vec.append(float(data[2]))
+            coord_bdf.append(vec)
+        else:
+            post_bdf.append(line)
+
+    bdf.close()
+
+    return coord_bdf, pre_bdf, post_bdf
+
+def write_mesh(coord, bdf_corresp, pre, post, mesh_filename):
+
+    nPoint = len(coord)
+
+    struct = open(mesh_filename, 'w')
+
+    for line in pre:
+        struct.write(line)
+
+    for iPoint in range(nPoint):
+        struct.write(str(coord[iPoint][0]) + " " + str(coord[iPoint][1]) + " " + str(coord[iPoint][2]) + " "+ str(bdf_corresp[iPoint]+1) +"\n")
+
+    for line in post:
+        struct.write(line)
+
+    struct.close()
+
+def write_bdf(coord, pre, post, bdf_filename):
+
+    bdf = open(bdf_filename, 'w')
+
+    def writeLine(line):
+        write(line,r=80)
+        write('\n')
+
+    def write(line,l=0,r=0):
+        if l is not 0:
+            n = l - len(line)
+            for i in range(n):
+                line = ' ' + line
+        if r is not 0:
+            n = r - len(line)
+            for i in range(n):
+                line = line + ' '
+        bdf.write(line)
+
+
+    for line in pre:
+        bdf.write(line)
+
+    for k in range(len(coord)):
+
+        write('GRID*   ')
+
+        write(str(k+1),l=16)
+        write('0',l=16)
+        write('%.8E' % coord[k][0],l=16)
+        write('%.8E' % coord[k][1],l=16)
+
+        write('*G')
+        write(str(k+1),l=6)
+        write('\n')
+        write('*G')
+        write(str(k+1),l=6)
+
+        write('%.8E' % coord[k][2],l=16)
+        write('0',l=16)
+        write(' ',l=16)
+        write('0',l=16)
+        write(' ',l=8)
+
+        write('\n')
+
+    for line in post:
+        bdf.write(line)
+
+    bdf.close()
+
+def isInt(s):
+
+    try: 
+        int(s)
+        return True
+    except ValueError:
+        return False
 
 class Spaceplane(PGMconfiguration):
 

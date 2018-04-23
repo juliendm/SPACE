@@ -13,7 +13,9 @@ import numpy as np
 
 class Load(object):
 
-    def __init__(self, config, load_filename, safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0):
+    def __init__(self, config, load_filename, safetyFactor_thrust = 1.0, safetyFactor_inertial = 1.0, safetyFactor_non_inertial = 1.0, regime = 'ON'):
+
+        self._regime = regime
 
         self._nDim = 3
         self._nNode = 4
@@ -151,28 +153,34 @@ class Load(object):
         # print lift_coeff, drag_coeff
 
 
-    def update(self, half_dry_mass_kg_current_step):
+    def update(self, half_mass_kg_current_step):
 
         self._load_bdf = [[0.0 for iDim in range(self._nDim)] for iPoint_bdf in range(self._nPoint_bdf)]
 
         # Accelerations
 
-        # self._nx = float(self._config.ACCELERATION_X)
-        # self._ny = float(self._config.ACCELERATION_Y)
-        # self._nz = float(self._config.ACCELERATION_Z)
+        if self._regime == 'BOTH':
 
-        re = 6378137.0
-        gm = 3986004.418e+08
-        g0 = gm / re**2.0
+            self._nx = float(self._config.ACCELERATION_X)
+            self._ny = float(self._config.ACCELERATION_Y)
+            self._nz = float(self._config.ACCELERATION_Z)
+
+        else:
+
+            re = 6378137.0
+            gm = 3986004.418e+08
+            g0 = gm / re**2.0
 
 
-        # TO COMPUTE ACCELERATION; ADD CURRENT FUEL TO DRY MASS !!!!!!!!!!!!!!!
+            # TO COMPUTE ACCELERATION; ADD CURRENT FUEL TO DRY MASS !!!!!!!!!!!!!!!
 
-        accelerated_mass = half_dry_mass_kg_current_step + self._fuel_percentage*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)
+            # half_mass_kg_current_step IS ACTUALLY half_dry_mass_kg_current_step
 
-        self._nx = (self._half_thrust_newtons - np.cos(self._aoa_rad)*self._drag_coeff_filtered*self._pdyn_inf*self._ref_area + np.sin(self._aoa_rad)*self._lift_coeff_filtered*self._pdyn_inf*self._ref_area) / (accelerated_mass*g0) # Trajectory Frame
-        self._ny = 0.0
-        self._nz = (                      0.0 - np.sin(self._aoa_rad)*self._drag_coeff_filtered*self._pdyn_inf*self._ref_area - np.cos(self._aoa_rad)*self._lift_coeff_filtered*self._pdyn_inf*self._ref_area) / (accelerated_mass*g0) # Trajectory Frame
+            accelerated_mass = half_mass_kg_current_step + self._fuel_percentage*(self._half_mass_fuel_kero+self._half_mass_fuel_lox)
+
+            self._nx = (self._half_thrust_newtons - np.cos(self._aoa_rad)*self._drag_coeff_filtered*self._pdyn_inf*self._ref_area + np.sin(self._aoa_rad)*self._lift_coeff_filtered*self._pdyn_inf*self._ref_area) / (accelerated_mass*g0) # Trajectory Frame
+            self._ny = 0.0
+            self._nz = (                      0.0 - np.sin(self._aoa_rad)*self._drag_coeff_filtered*self._pdyn_inf*self._ref_area - np.cos(self._aoa_rad)*self._lift_coeff_filtered*self._pdyn_inf*self._ref_area) / (accelerated_mass*g0) # Trajectory Frame
 
         self._loadFactor = np.sqrt(self._nx*self._nx+self._ny*self._ny+self._nz*self._nz) 
         self._gravity_vector = -9.81 * np.array([-self._nx,self._ny,-self._nz])/self._loadFactor # Change of Frame: to Structure Frame
@@ -185,7 +193,7 @@ class Load(object):
 
         # INERTIAL
 
-        self.__update_additional_mass(half_dry_mass_kg_current_step)
+        self.__update_additional_mass(half_mass_kg_current_step)
 
         for iPoint_bdf in range(self._nPoint_bdf):
             for iDim in range(self._nDim):
@@ -337,9 +345,9 @@ class Load(object):
             point_mass = self._area_voronoi[iPoint_bdf]*point_thickess[iPoint_bdf]*self._material_rho
             self._structural_mass_bdf[iPoint_bdf] = point_mass
 
-    def __update_additional_mass(self, half_dry_mass_kg_current_step):
+    def __update_additional_mass(self, half_mass_kg_current_step):
 
-        self.__update_half_additional_mass_kg_next_step(half_dry_mass_kg_current_step)
+        self.__update_half_additional_mass_kg_next_step(half_mass_kg_current_step)
 
         self._additional_mass_bdf = [0.0 for iPoint_bdf in range(len(self._coord_bdf))]
 
@@ -433,14 +441,21 @@ class Load(object):
 
 
 
-    def __update_half_additional_mass_kg_next_step(self, half_dry_mass_kg_current_step):
+    def __update_half_additional_mass_kg_next_step(self, half_mass_kg_current_step):
 
         pounds_to_kg = 0.453592
         newtons_to_pounds = 0.224809
         kg_to_pounds = 2.20462
         meters_to_feet = 3.28084
 
-        weight_pounds_current_step = 2.0*(half_dry_mass_kg_current_step+self._half_mass_fuel_kero+self._half_mass_fuel_lox)*kg_to_pounds
+        if self._regime == 'BOTH':
+            weight_pounds_current_step = 2.0*half_mass_kg_current_step*kg_to_pounds # half_mass_kg_current_step IS ACTUALLY half_wet_mass_kg_current_step
+        else:
+            weight_pounds_current_step = 2.0*(half_mass_kg_current_step+self._half_mass_fuel_kero+self._half_mass_fuel_lox)*kg_to_pounds # half_mass_kg_current_step IS ACTUALLY half_dry_mass_kg_current_step
+        
+
+
+
         max_thrust_pounds = 2.0*self._half_max_thrust_newtons*newtons_to_pounds
 
         body_length_feet = self._body_length*meters_to_feet
@@ -537,9 +552,12 @@ class Load(object):
             pressure = self._pdyn_inf*self._pressureCoeff_bdf[iPoint_bdf] # + float(konfig.P_INF) # NOT ADDING p_inf CAUSE SPACEPLANE IS NOT PRESSURIZED
             for iDim in range(self._nDim):
                 
-                #if not iPoint_bdf in self._apply_fuse_r: # NOT A GOOD IDEA !!!!!!!!!
+                if self._regime == 'BOTH':
+                    if not iPoint_bdf in self._apply_fuse_r: # NOT A GOOD IDEA !!!!!!!!!
+                        self._load_noninertial_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial # MINUS SIGN CAUSE PRESSURE PUSHES INWARD
+                else:
+                    self._load_noninertial_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial # MINUS SIGN CAUSE PRESSURE PUSHES INWARD
 
-                self._load_noninertial_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure * self._safetyFactor_non_inertial # MINUS SIGN CAUSE PRESSURE PUSHES INWARD
                 self._load_aero_bdf[iPoint_bdf][iDim] -= self._normal_voronoi[iPoint_bdf][iDim]*pressure
 
             # Friction
@@ -547,9 +565,12 @@ class Load(object):
             for iDim in range(self._nDim):
                 shear_stress = self._pdyn_inf*self._frictionCoeff_bdf[iPoint_bdf][iDim]
                 
-                #if not iPoint_bdf in self._apply_fuse_r: # NOT A GOOD IDEA !!!!!!!!!
+                if self._regime == 'BOTH':
+                    if not iPoint_bdf in self._apply_fuse_r: # NOT A GOOD IDEA !!!!!!!!!
+                        self._load_noninertial_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress * self._safetyFactor_non_inertial
+                else:
+                    self._load_noninertial_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress * self._safetyFactor_non_inertial
 
-                self._load_noninertial_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress * self._safetyFactor_non_inertial
                 self._load_aero_bdf[iPoint_bdf][iDim] += self._area_voronoi[iPoint_bdf]*shear_stress
 
 

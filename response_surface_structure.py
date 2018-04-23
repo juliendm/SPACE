@@ -76,11 +76,55 @@ def response_surface( filename          ,
         ndim_struct = desvar.ndim_struct_on
         unpack_structure = desvar.unpack_structure_on
         pack_structure = desvar.pack_structure_on
+
+        dry_mass_index = 3
+        fuel_mass_index = 4
+        thrust_index = 5
+        pdyn_index = 6
+
+        dv1_index = 7
+        dv2_index = 8
+        dv3_index = 9
+        dv4_index = 10
+        dv5_index = 11
+        dv6_index = 12
+
+        dvs_baseline = [1.1,0.0,1.0,20.0e3,20.0e3,2.5e6,20.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
+
     elif regime == 'OFF':
+
         XB = desvar.XB_STRUCT_OFF
         ndim_struct = desvar.ndim_struct_off
         unpack_structure = desvar.unpack_structure_off
         pack_structure = desvar.pack_structure_off
+
+    elif regime == 'BOTH':
+
+        XB = desvar.XB_STRUCT
+        ndim_struct = desvar.ndim_struct
+        unpack_structure = desvar.unpack_structure
+        pack_structure = desvar.pack_structure
+
+        mach_index = 0
+        rey_index = 1
+        aoa_index = 2
+
+        nx_index = 3
+        nz_index = 4
+
+        thrust_index = 5
+        pdyn_index = 6
+        fuel_mass_index = 7
+
+        dv1_index = 8
+        dv2_index = 9
+        dv3_index = 10
+        dv4_index = 11
+        dv5_index = 12
+        dv6_index = 13
+
+        dvs_baseline = [1.1,0.0,1.0,3.0,-3.0,1.5e6,20.0e3,20.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
+
 
     if initiate:
 
@@ -108,7 +152,7 @@ def response_surface( filename          ,
 
     else:
 
-        na = 20
+        na = 10
         number_per_ite = 12
 
 #        flag = 'DRY_MASS'     # WHICH ONE ???????
@@ -116,13 +160,18 @@ def response_surface( filename          ,
 
         threshold = 1.0001
 
-        build_points_folder = os.path.join(project_folder,'BUILD_POINTS')
 
-        model = Surfpack(flag, ndim_struct)
-        model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
-        exclude = []
 
-        next_dvs_vec_filename = 'next_dvs_vec_' + regime + '.dat'
+        # build_points_folder = os.path.join(project_folder,'BUILD_POINTS')
+
+        # model = Surfpack(flag, ndim_struct)
+        # model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
+        # exclude = []
+
+        # next_dvs_vec_filename = 'next_dvs_vec_' + regime + '.dat'
+
+
+
 
         # new_dvs_vec = []
         # for dsn_index in range(12):
@@ -132,21 +181,113 @@ def response_surface( filename          ,
         #     new_dvs_vec.append(local_dvs)
         # np.savetxt(next_dvs_vec_filename, new_dvs_vec)
 
+
+
+
         print 'Begin Iterating:'
 
         for ite in range(na):
 
             print 'Ite:', ite
-            model.build('kriging')
-            print 'Model built'
 
             # NEW POINTS
 
             if ite == 0:
 
-                new_dvs_vec = np.loadtxt(next_dvs_vec_filename)
+                #new_dvs_vec = np.loadtxt(next_dvs_vec_filename)
+
+                vals = np.linspace(-0.5, 0.5, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[dv1_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 1:
+
+                vals = np.linspace(0.0, 26.0e3, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[fuel_mass_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 2:
+
+                vals = np.linspace(0.1e6, 3.0e6, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[thrust_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 3:
+
+                vals = np.linspace(1.0e-6, 35.0e3, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[pdyn_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 4:
+
+                vals = np.linspace(1.1, 8.0, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[mach_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 5:
+
+                vals = np.linspace(-1.0, 1.0, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[aoa_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 6:
+
+                vals = np.linspace(-3.0, 6.0, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[nx_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 7:
+
+                vals = np.linspace(-6.0, 3.0, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[nz_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 8:
+
+                vals = np.linspace(-0.5, 0.5, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[dv2_index] = val
+                    new_dvs_vec.append(dvs)
+
+            elif ite == 9:
+
+                vals = np.linspace(-0.5, 0.5, 10.0)
+                new_dvs_vec = []
+                for val in vals:
+                    dvs = copy.copy(dvs_baseline)
+                    dvs[dv3_index] = val
+                    new_dvs_vec.append(dvs)
 
             else:
+
+                model.build('kriging')
+                print 'Model built'
 
                 new_dvs_vec = model.max_variance(XB, number = number_per_ite, exclude = exclude)
                 np.savetxt(next_dvs_vec_filename, new_dvs_vec)
@@ -179,44 +320,44 @@ def response_surface( filename          ,
 
 #            for dsn_index in range(number_design_after-effective_number_per_ite,number_design_after):
 
-            model = Surfpack(flag + '_' + str(ite), ndim_struct)
-            model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
-            exclude = []
-            for dsn_index in range(0,number_design_after):
+            # model = Surfpack(flag + '_' + str(ite), ndim_struct)
+            # model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
+            # exclude = []
+            # for dsn_index in range(0,number_design_after):
 
-                design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
+            #     design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
 
-                history_file_name = os.path.join(design_folder,'STRUCTURE/history_structure.dat')
-                postpro_file_name = os.path.join(design_folder,'STRUCTURE/postpro_load_1.dat')
-                mass_file_name = os.path.join(design_folder,'STRUCTURE/lc0_mass_member.dat') # TO CHECK IF DONE INDEED
+            #     history_file_name = os.path.join(design_folder,'STRUCTURE/history_structure.dat')
+            #     postpro_file_name = os.path.join(design_folder,'STRUCTURE/postpro_load_1.dat')
+            #     mass_file_name = os.path.join(design_folder,'STRUCTURE/lc0_mass_member.dat') # TO CHECK IF DONE INDEED
 
-                if os.path.exists(history_file_name) and os.path.exists(postpro_file_name) and os.path.exists(mass_file_name):
+            #     if os.path.exists(history_file_name) and os.path.exists(postpro_file_name) and os.path.exists(mass_file_name):
 
-                    history = np.loadtxt(history_file_name,delimiter=',',skiprows=1)
+            #         history = np.loadtxt(history_file_name,delimiter=',',skiprows=1)
 
-                    half_structure_mass = history[-1,1]
+            #         half_structure_mass = history[-1,1]
 
-                    local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
-                    local_dvs = pack_structure(local_config)
+            #         local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
+            #         local_dvs = pack_structure(local_config)
 
-                    # ADD VALUE
+            #         # ADD VALUE
 
-                    check = history[-1,2:5]
-                    if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
+            #         check = history[-1,2:5]
+            #         if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
 
-                        if flag == 'STRUCTURE_MASS':
-                            model.add(local_dvs, half_structure_mass)
-                        elif flag == 'DRY_MASS':
-                            raise ValueError('Do not use, not correctly defined')
+            #             if flag == 'STRUCTURE_MASS':
+            #                 model.add(local_dvs, half_structure_mass)
+            #             elif flag == 'DRY_MASS':
+            #                 raise ValueError('Do not use, not correctly defined')
 
-                    else:
-                        exclude.append(local_dvs)
-                        print 'Warning:', dsn_index+1
-                else:
-                    print 'Missing:', dsn_index+1
+            #         else:
+            #             exclude.append(local_dvs)
+            #             print 'Warning:', dsn_index+1
+            #     else:
+            #         print 'Missing:', dsn_index+1
 
 
-            model.save_data(os.path.join(build_points_folder,'enriched_points_' + flag + '.dat'))
+            # model.save_data(os.path.join(build_points_folder,'enriched_points_' + flag + '.dat'))
 
 
         # Save Model
