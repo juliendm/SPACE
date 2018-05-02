@@ -30,7 +30,7 @@ from SPACE.surfpack import Surfpack
 #  Main Function Interface
 # ----------------------------------------------------------------------
 
-def build(regime = 'ON'):
+def build(regime = 'BOTH'):
 
     models_folder = 'MODELS'
     build_points_folder = 'BUILD_POINTS'
@@ -52,20 +52,19 @@ def build(regime = 'ON'):
     #     mass_model.build('kriging')
     #     mass_model.save_model(os.path.join(models_folder,'model_mass_%05d.sps' % (index+1)))
 
-    for index in range(129,n_models):
-        print 'AREA',index
-        area_model = Surfpack('AREA_%05d' % (index+1), ndim_struct)
-        area_model.load_data(os.path.join(build_points_folder,'enriched_points_area_%05d.dat' % (index+1)))
-        area_model.build('kriging')
-        area_model.save_model(os.path.join(models_folder,'model_area_%05d.sps' % (index+1)))
+    # for index in range(0,n_models):
+    #     print 'AREA',index
+    #     area_model = Surfpack('AREA_%05d' % (index+1), ndim_struct)
+    #     area_model.load_data(os.path.join(build_points_folder,'enriched_points_area_%05d.dat' % (index+1)))
+    #     area_model.build('kriging')
+    #     area_model.save_model(os.path.join(models_folder,'model_area_%05d.sps' % (index+1)))
 
-    for index in range(0,n_models):
-        print 'THICKNESS',index
-        thickness_model = Surfpack('THICKNESS_%05d' % (index+1), ndim_struct)
-        thickness_model.load_data(os.path.join(build_points_folder,'enriched_points_thickness_%05d.dat' % (index+1)))
-        thickness_model.build('kriging')
-        thickness_model.save_model(os.path.join(models_folder,'model_thickness_%05d.sps' % (index+1)))
-
+    # for index in range(0,n_models):
+    #     print 'THICKNESS',index
+    #     thickness_model = Surfpack('THICKNESS_%05d' % (index+1), ndim_struct)
+    #     thickness_model.load_data(os.path.join(build_points_folder,'enriched_points_thickness_%05d.dat' % (index+1)))
+    #     thickness_model.build('kriging')
+    #     thickness_model.save_model(os.path.join(models_folder,'model_thickness_%05d.sps' % (index+1)))
 
     print 'MASS'
     structure_mass_model = Surfpack('STRUCTURE_MASS', ndim_struct)

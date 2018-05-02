@@ -45,7 +45,7 @@ def main():
 
 def response_surface( filename          ,
                       project_folder    ,
-                      regime = 'ON'     ,
+                      regime = 'BOTH'   ,
                       initiate = False  ,
                       partitions  = 0  ):
 
@@ -125,34 +125,95 @@ def response_surface( filename          ,
 
         dvs_baseline = [1.1,0.0,1.0,3.0,-3.0,1.5e6,20.0e3,20.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
 
+        # Midpoint
+        dvs_baseline = [4.5,0.0,0.0,3.0,-3.0,1.5e6,20.0e3,14.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
+
 
     if initiate:
 
-        nd = ndim_struct * 10
-        dvs_struct_filename = 'dvs_struct_' + regime + '.dat'
 
-        # X = LHC_unif(XB,nd)
-        # np.savetxt(dvs_struct_filename,X)
+        vals = np.linspace(-0.5, 0.5, 10.0)
+        new_dvs_vec = []
+        for val in vals:
+            dvs = copy.copy(dvs_baseline)
+            dvs[dv2_index] = val
+            new_dvs_vec.append(dvs)
 
-        X = np.loadtxt(dvs_struct_filename)
 
-        for index in range(nd):
+        procs = []
 
-            dvs = X[index]
+        for new_dvs in new_dvs_vec:
+
+            print 'New dvs: ', new_dvs
 
             konfig = copy.deepcopy(config)
-            unpack_structure(konfig, dvs)
+            unpack_structure(konfig, new_dvs)
 
             proc = project.func('STRUCTURE', konfig)
+            procs.append(proc)
 
-            # force_redo_dsn_folder = None #'DSN_001'
-            # proc = project.func('STRUCTURE', konfig, force_redo_dsn_folder)
-
+        for proc in procs:
             proc.wait()
+
+
+        vals = np.linspace(-0.5, 0.5, 10.0)
+        new_dvs_vec = []
+        for val in vals:
+            dvs = copy.copy(dvs_baseline)
+            dvs[dv3_index] = val
+            new_dvs_vec.append(dvs)
+
+
+        procs = []
+
+        for new_dvs in new_dvs_vec:
+
+            print 'New dvs: ', new_dvs
+
+            konfig = copy.deepcopy(config)
+            unpack_structure(konfig, new_dvs)
+
+            proc = project.func('STRUCTURE', konfig)
+            procs.append(proc)
+
+        for proc in procs:
+            proc.wait()
+
+
+        # # nd = ndim_struct * 10
+        # nd = 300
+
+        # dvs_struct_filename = 'dvs_struct_' + regime + '.dat'
+
+        # # X = LHC_unif(XB,nd)
+        # # np.savetxt(dvs_struct_filename,X)
+
+        # X = np.loadtxt(dvs_struct_filename)
+
+        # for index_1 in range(nd/partitions):
+        #     procs = []
+        #     for index_2 in range(partitions):
+        #         index = index_1*partitions+index_2
+
+        #         dvs = X[index]
+
+        #         konfig = copy.deepcopy(config)
+        #         unpack_structure(konfig, dvs)
+
+        #         proc = project.func('STRUCTURE', konfig)
+
+        #         # force_redo_dsn_folder = None #'DSN_001'
+        #         # proc = project.func('STRUCTURE', konfig, force_redo_dsn_folder)
+
+        #         procs.append(proc)
+
+
+        #     for proc in procs:
+        #         proc.wait()
 
     else:
 
-        na = 10
+        na = 20
         number_per_ite = 12
 
 #        flag = 'DRY_MASS'     # WHICH ONE ???????
@@ -162,13 +223,13 @@ def response_surface( filename          ,
 
 
 
-        # build_points_folder = os.path.join(project_folder,'BUILD_POINTS')
+        build_points_folder = os.path.join(project_folder,'BUILD_POINTS')
 
-        # model = Surfpack(flag, ndim_struct)
-        # model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
-        # exclude = []
+        model = Surfpack(flag, ndim_struct)
+        model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
+        exclude = []
 
-        # next_dvs_vec_filename = 'next_dvs_vec_' + regime + '.dat'
+        next_dvs_vec_filename = 'next_dvs_vec_' + regime + '.dat'
 
 
 
@@ -182,8 +243,6 @@ def response_surface( filename          ,
         # np.savetxt(next_dvs_vec_filename, new_dvs_vec)
 
 
-
-
         print 'Begin Iterating:'
 
         for ite in range(na):
@@ -194,95 +253,7 @@ def response_surface( filename          ,
 
             if ite == 0:
 
-                #new_dvs_vec = np.loadtxt(next_dvs_vec_filename)
-
-                vals = np.linspace(-0.5, 0.5, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[dv1_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 1:
-
-                vals = np.linspace(0.0, 26.0e3, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[fuel_mass_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 2:
-
-                vals = np.linspace(0.1e6, 3.0e6, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[thrust_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 3:
-
-                vals = np.linspace(1.0e-6, 35.0e3, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[pdyn_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 4:
-
-                vals = np.linspace(1.1, 8.0, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[mach_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 5:
-
-                vals = np.linspace(-1.0, 1.0, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[aoa_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 6:
-
-                vals = np.linspace(-3.0, 6.0, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[nx_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 7:
-
-                vals = np.linspace(-6.0, 3.0, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[nz_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 8:
-
-                vals = np.linspace(-0.5, 0.5, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[dv2_index] = val
-                    new_dvs_vec.append(dvs)
-
-            elif ite == 9:
-
-                vals = np.linspace(-0.5, 0.5, 10.0)
-                new_dvs_vec = []
-                for val in vals:
-                    dvs = copy.copy(dvs_baseline)
-                    dvs[dv3_index] = val
-                    new_dvs_vec.append(dvs)
+                new_dvs_vec = np.loadtxt(next_dvs_vec_filename)
 
             else:
 
@@ -318,46 +289,46 @@ def response_surface( filename          ,
             # READ RESULTS
 
 
-#            for dsn_index in range(number_design_after-effective_number_per_ite,number_design_after):
+#           for dsn_index in range(number_design_after-effective_number_per_ite,number_design_after):
 
-            # model = Surfpack(flag + '_' + str(ite), ndim_struct)
-            # model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
-            # exclude = []
-            # for dsn_index in range(0,number_design_after):
+            model = Surfpack(flag + '_' + str(ite), ndim_struct)
+#            model.load_data(os.path.join(build_points_folder,'build_points_' + flag + '.dat'))
+            exclude = []
+            for dsn_index in range(0,number_design_after):
 
-            #     design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
+                design_folder = os.path.join(project_folder,'DESIGNS/DSN_%03d' % (dsn_index+1))
 
-            #     history_file_name = os.path.join(design_folder,'STRUCTURE/history_structure.dat')
-            #     postpro_file_name = os.path.join(design_folder,'STRUCTURE/postpro_load_1.dat')
-            #     mass_file_name = os.path.join(design_folder,'STRUCTURE/lc0_mass_member.dat') # TO CHECK IF DONE INDEED
+                history_file_name = os.path.join(design_folder,'STRUCTURE/history_structure.dat')
+                postpro_file_name = os.path.join(design_folder,'STRUCTURE/postpro_load_1.dat')
+                mass_file_name = os.path.join(design_folder,'STRUCTURE/lc0_mass_member.dat') # TO CHECK IF DONE INDEED
 
-            #     if os.path.exists(history_file_name) and os.path.exists(postpro_file_name) and os.path.exists(mass_file_name):
+                if os.path.exists(history_file_name) and os.path.exists(postpro_file_name) and os.path.exists(mass_file_name):
 
-            #         history = np.loadtxt(history_file_name,delimiter=',',skiprows=1)
+                    history = np.loadtxt(history_file_name,delimiter=',',skiprows=1)
 
-            #         half_structure_mass = history[-1,1]
+                    half_structure_mass = history[-1,1]
 
-            #         local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
-            #         local_dvs = pack_structure(local_config)
+                    local_config = SPACE.io.Config(os.path.join(design_folder,'config_DSN.cfg'))
+                    local_dvs = pack_structure(local_config)
 
-            #         # ADD VALUE
+                    # ADD VALUE
 
-            #         check = history[-1,2:5]
-            #         if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
+                    check = history[-1,2:5]
+                    if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
 
-            #             if flag == 'STRUCTURE_MASS':
-            #                 model.add(local_dvs, half_structure_mass)
-            #             elif flag == 'DRY_MASS':
-            #                 raise ValueError('Do not use, not correctly defined')
+                        if flag == 'STRUCTURE_MASS':
+                            model.add(local_dvs, half_structure_mass)
+                        elif flag == 'DRY_MASS':
+                            raise ValueError('Do not use, not correctly defined')
 
-            #         else:
-            #             exclude.append(local_dvs)
-            #             print 'Warning:', dsn_index+1
-            #     else:
-            #         print 'Missing:', dsn_index+1
+                    else:
+                        exclude.append(local_dvs)
+                        print 'Warning:', dsn_index+1
+                else:
+                    print 'Missing:', dsn_index+1
 
 
-            # model.save_data(os.path.join(build_points_folder,'enriched_points_' + flag + '.dat'))
+            model.save_data(os.path.join(build_points_folder,'enriched_points_' + flag + '.dat'))
 
 
         # Save Model
@@ -395,6 +366,105 @@ def load_aero_models():
 
 
 #: load_models()
+
+
+
+
+
+
+
+            #     vals = np.linspace(-0.5, 0.5, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[dv1_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 1:
+
+            #     vals = np.linspace(0.0, 26.0e3, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[fuel_mass_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 2:
+
+            #     vals = np.linspace(0.1e6, 3.0e6, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[thrust_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 3:
+
+            #     vals = np.linspace(1.0e-6, 35.0e3, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[pdyn_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 4:
+
+            #     vals = np.linspace(1.1, 8.0, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[mach_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 5:
+
+            #     vals = np.linspace(-1.0, 1.0, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[aoa_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 6:
+
+            #     vals = np.linspace(-3.0, 6.0, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[nx_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 7:
+
+            #     vals = np.linspace(-6.0, 3.0, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[nz_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 8:
+
+            #     vals = np.linspace(-0.5, 0.5, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[dv2_index] = val
+            #         new_dvs_vec.append(dvs)
+
+            # elif ite == 9:
+
+            #     vals = np.linspace(-0.5, 0.5, 10.0)
+            #     new_dvs_vec = []
+            #     for val in vals:
+            #         dvs = copy.copy(dvs_baseline)
+            #         dvs[dv3_index] = val
+            #         new_dvs_vec.append(dvs)
+
+
+
+
+
 
 
 

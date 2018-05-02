@@ -11,6 +11,8 @@ import os, sys, shutil, copy, glob, re
 
 import subprocess
 import numpy
+import scipy as sp
+import pyOpt
 
 SPACE_RUN = os.environ['SPACE_RUN']
 
@@ -41,7 +43,7 @@ from sklearn.naive_bayes import GaussianNB
 #  Main Function Interface
 # ----------------------------------------------------------------------
 
-def create_sol(regime = 'ON'):
+def create_sol(regime = 'BOTH'):
 
     n_models = 132
     models_folder = 'MODELS'
@@ -98,11 +100,25 @@ def create_sol(regime = 'ON'):
         dv6_index = 13
 
 
-    # mass_models = []
-    # for index in range(n_models):
-    #     mass_model = Surfpack('MASS_%05d' % (index+1), ndim_struct)
-    #     mass_model.load_model(os.path.join(models_folder,'model_mass_%05d.sps' % (index+1)))
-    #     mass_models.append(mass_model)
+    mass_models = []
+    for index in range(n_models):
+        mass_model = Surfpack('MASS_%05d' % (index+1), ndim_struct)
+        mass_model.load_model(os.path.join(models_folder,'model_mass_%05d.sps' % (index+1)))
+        mass_models.append(mass_model)
+
+    mass_models[29-1] = 1.480621e+00
+    mass_models[87-1] = 1.419052e+00
+    mass_models[88-1] = 1.542190e+00
+    mass_models[119-1] = 4.657316e+00
+    mass_models[122-1] = 6.165402e+00
+
+
+
+
+
+
+
+
 
     # area_models = []
     # for index in range(n_models):
@@ -110,23 +126,118 @@ def create_sol(regime = 'ON'):
     #     area_model.load_model(os.path.join(models_folder,'model_area_%05d.sps' % (index+1)))
     #     area_models.append(area_model)
 
+    # area_models[29-1] = 3.328734e-01
+    # area_models[87-1] = 3.190315e-01
+    # area_models[88-1] = 3.467154e-01
+    # area_models[119-1] = 1.047058e+00
+    # area_models[122-1] = 1.386107e+00
+
+    # thickness_models = []
+    # for index in range(n_models):
+    #     thickness_model = Surfpack('THICKNESS_%05d' % (index+1), ndim_struct)
+    #     thickness_model.load_model(os.path.join(models_folder,'model_thickness_%05d.sps' % (index+1)))
+    #     thickness_models.append(thickness_model)
+
+    # thickness_models[29-1] = 1.600000e-03
+    # thickness_models[87-1] = 1.600000e-03
+    # thickness_models[88-1] = 1.600000e-03
+    # thickness_models[119-1] = 1.600000e-03
+    # thickness_models[122-1] = 1.600000e-03
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # thickness_models = []
     # thickness_clfs = []
     # thickness_values = []
     # for index in range(n_models):
 
     #     dat_file = os.path.join(build_points_folder,'enriched_points_thickness_%05d.dat' % (index+1))
-    #     clf, values = get_clf(dat_file)
+    #     clf, values, X_train, y_train = get_clf(dat_file)
     #     thickness_clfs.append(clf)
     #     thickness_values.append(values)
 
-    #     filename = os.path.join(models_folder,'model_thickness_filtered_%05d.sps' % (index+1))
-    #     if os.path.exists(filename):
-    #         thickness_model = Surfpack('THICKNESS_%05d' % (index+1), ndim_struct)
-    #         thickness_model.load_model(filename)
-    #         thickness_models.append(thickness_model)
-    #     else:
-    #         thickness_models.append(None)
+
+
+
+
+    #     count = 0
+    #     thicknesses = []
+    #     for dvs in X_train:
+    #         proba = clf.predict_proba([dvs])[0]
+    #         thickness = values[numpy.argmax(proba)]
+    #         if not thickness: count += 1
+    #         thicknesses.append(thickness)
+
+    #     print index+1, count
+
+
+    #     if count > 10:
+    #         def pareto_function(x):
+    #             F = [abs(clf.predict_proba([x])[0][0]-0.5)]  # NEED TO SOLVE FOR BOTH BOUNDARIES, ONLY LOWER BOUNDARY SO FAR
+    #             G = []
+    #             if len(F)==1: F=F[0]
+    #             fail = 0
+    #             return F,G,fail 
+
+    #         prob = pyOpt.Optimization('Variance Maximization',pareto_function)
+            
+    #         XB = desvar.XB_STRUCT
+    #         for ix in range(XB.shape[0]):
+    #             prob.addVar('X%i'%ix,'c',lower=XB[ix,0],upper=XB[ix,1],value=0.5*(XB[ix,0]+XB[ix,1]))
+                
+    #         prob.addObj('Estimated Variance')
+
+    #         opt_ALPSO = pyOpt.ALPSO(pll_type=None)
+    #         opt_ALPSO.setOption('fileout',0)
+    #         opt_ALPSO.setOption('maxOuterIter',10)
+    #         opt_ALPSO.setOption('stopCriteria',1)       
+    #         opt_ALPSO.setOption('SwarmSize',ndim_struct*20)
+
+    #         [YI_min,X_min,Info] = opt_ALPSO(prob)
+
+    #         print X_min.tolist()
+    #         print clf.predict_proba([X_min.tolist()])[0]
+
+
+    #     print '---------------------'
+
+    #     # filename = os.path.join(models_folder,'model_thickness_filtered_%05d.sps' % (index+1))
+    #     # if os.path.exists(filename):
+    #     #     thickness_model = Surfpack('THICKNESS_%05d' % (index+1), ndim_struct)
+    #     #     thickness_model.load_model(filename)
+    #     #     thickness_models.append(thickness_model)
+    #     # else:
+    #     #     thickness_models.append(None)
+
+    # sys.exit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     structure_mass_model = Surfpack('STRUCTURE_MASS', ndim_struct)
     structure_mass_model.load_model(os.path.join(models_folder,'model_structure_mass.sps'))
@@ -134,8 +245,8 @@ def create_sol(regime = 'ON'):
     structure_area_model = Surfpack('STRUCTURE_AREA', ndim_struct)
     structure_area_model.load_model(os.path.join(models_folder,'model_structure_area.sps'))
 
-    structure_mass_model_538 = Surfpack('STRUCTURE_MASS_538', ndim_struct)
-    structure_mass_model_538.load_model(os.path.join(models_folder,'model_structure_mass_538.sps'))
+    # structure_mass_model_538 = Surfpack('STRUCTURE_MASS_538', ndim_struct)
+    # structure_mass_model_538.load_model(os.path.join(models_folder,'model_structure_mass_538.sps'))
 
 
     # if regime == 'ON':
@@ -186,99 +297,142 @@ def create_sol(regime = 'ON'):
         #dvs = [3.5,0.0,0.0,20.0e3,20.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
         dvs_baseline = [1.1,0.0,1.0,3.0,-3.0,1.5e6,20.0e3,20.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
 
-
-    # print 'FIG 1'
-
-    # fig = plt.figure()
-    # vals = numpy.linspace(0.1e6,3.0e6, 10.0)
-    # for dv_index in [thrust_index]:
-    #     half_structure_masses = []
-    #     half_structure_masses_compounded = []
-    #     for val in vals:
-    #         dvs = copy.copy(dvs_baseline)
-    #         dvs[dv_index] = val
-    #         #dvs[dry_mass_index] = 20.e3
-    #         half_structure_mass = structure_mass_model.eval(dvs)
-    #         #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
-    #         # for index in range(10):
-    #         #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
-    #         #     half_structure_mass = structure_mass_model.eval(dvs)
-    #         #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
-    #         half_structure_masses.append(half_structure_mass)
-
-    #         #dvs[dry_mass_index] = 20.e3
-
-    #         # half_structure_mass_compounded = 0
-    #         # for index in range(n_models):
-    #         #     area = area_models[index].eval(dvs)
-    #         #     thickness = thickness_models[index].eval(dvs)
-    #         #     if thickness < 0.0016: thickness = 0.0016
-    #         #     half_structure_mass_compounded += area*thickness*2780.0
-
-    #         if thickness_models[51]: half_structure_mass_compounded = thickness_models[51].eval(dvs)
-
-    #         #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
-    #         # for index in range(10):
-    #         #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
-    #         #     half_structure_mass_compounded = 0
-    #         #     for index in range(n_models):
-    #         #         half_structure_mass_compounded += mass_models[index].eval(dvs)
-    #         #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
-    #         half_structure_masses_compounded.append(half_structure_mass_compounded)
-
-    #     #plt.plot(vals, half_structure_masses) #, color='red')
-    #     plt.plot(vals, half_structure_masses_compounded) #, color='red')
-
-    # plt.legend(['thrust'])
-    # fig.savefig('fig_1.png')
-    # plt.close(fig)
-
-    # print 'FIG 2'
-
-    # fig = plt.figure()
-    # vals = numpy.linspace(0.0, 35.0e3, 10.0)
-    # for dv_index in [pdyn_index]:
-    #     half_structure_masses = []
-    #     half_structure_masses_compounded = []
-    #     for val in vals:
-
-    #         dvs = copy.copy(dvs_baseline)
-
-    #         dvs[dv_index] = val
-
-    #         #dvs[dry_mass_index] = 20.e3
-    #         half_structure_mass = structure_mass_model.eval(dvs)
-    #         #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
-    #         # for index in range(10):
-    #         #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
-    #         #     half_structure_mass = structure_mass_model.eval(dvs)
-    #         #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
-    #         half_structure_masses.append(half_structure_mass)
-
-    #         #dvs[dry_mass_index] = 20.e3
-    #         half_structure_mass_compounded = 0
-    #         for index in range(n_models):
-    #             area = area_models[index].eval(dvs)
-    #             thickness = thickness_models[index].eval(dvs)
-    #             if thickness < 0.0016: thickness = 0.0016
-    #             half_structure_mass_compounded += area*thickness*2780.0
-    #         #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
-    #         # for index in range(10):
-    #         #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
-    #         #     half_structure_mass_compounded = 0
-    #         #     for index in range(n_models):
-    #         #         half_structure_mass_compounded += mass_models[index].eval(dvs)
-    #         #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
-    #         half_structure_masses_compounded.append(half_structure_mass_compounded)
+        # Midpoint
+        dvs_baseline = [4.5,0.0,0.0,3.0,-3.0,1.5e6,20.0e3,14.0e3,0.0,0.0,0.0,0.0,0.0,0.0]
 
 
-    #     plt.plot(vals, half_structure_masses) #, color='red')
-    #     plt.plot(vals, half_structure_masses_compounded) #, color='red')
-    # plt.legend(['pdyn'])
-    # fig.savefig('fig_2.png')
-    # plt.close(fig)
+    print 'FIG 1'
+
+    data_vals = numpy.linspace(0.1e6,3.0e6, 10.0)
+    data_thrust = [4649.719614,4687.683943,4821.850514,4973.544549,5123.671123,5284.42803,5458.613164,5680.410132,5954.866974,6221.018232]
+
+    fig = plt.figure()
+    vals = numpy.linspace(0.1e6,3.0e6, 10.0)
+    for dv_index in [thrust_index]:
+        half_structure_masses = []
+        half_structure_masses_compounded = []
+        for val in vals:
+            dvs = copy.copy(dvs_baseline)
+            dvs[dv_index] = val
+            #dvs[dry_mass_index] = 20.e3
+            half_structure_mass = structure_mass_model.eval(dvs)
+            #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
+            # for index in range(10):
+            #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
+            #     half_structure_mass = structure_mass_model.eval(dvs)
+            #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
+            half_structure_masses.append(half_structure_mass)
+
+            #dvs[dry_mass_index] = 20.e3
+
+            # half_structure_mass_compounded = 0
+            # for index in range(n_models):
+            #     area = area_models[index].eval(dvs)
+            #     thickness = thickness_models[index].eval(dvs)
+            #     if thickness < 0.0016: thickness = 0.0016
+            #     half_structure_mass_compounded += area*thickness*2780.0
+
+            #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
+            # for index in range(10):
+            #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
+            #     half_structure_mass_compounded = 0
+            #     for index in range(n_models):
+            #         half_structure_mass_compounded += mass_models[index].eval(dvs)
+            #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
+            # half_structure_masses_compounded.append(half_structure_mass_compounded)
+
+
+            half_structure_mass_compounded = 0
+            for index in range(n_models):
+                if isinstance(mass_models[index], float):
+                    mass = mass_models[index]
+                else:
+                    mass = mass_models[index].eval(dvs)
+                print mass
+                half_structure_mass_compounded += mass
+            half_structure_masses_compounded.append(half_structure_mass_compounded)
+
+
+
+        plt.plot(vals, half_structure_masses, linestyle='-', color='b') #, color='red')
+        # plt.plot(vals, half_structure_masses_compounded, linestyle='-.', color='b') #, color='red')
+
+    plt.plot(data_vals, data_thrust, linestyle='--', color='b')
+
+    plt.legend(['thrust model','thrust model comp','thrust data'])
+    fig.savefig('fig_1.png')
+    plt.close(fig)
+
+    print 'FIG 2'
+
+    data_vals = numpy.linspace(1.0e-6, 35.0e3, 10.0)
+    data_pdyn = [2957.71009,2625.264827,3001.195708,3736.965894,4429.157145,5088.273839,5688.673517,6294.21067,6926.893072,7560.110534]
+
+    fig = plt.figure()
+    vals = numpy.linspace(0.0, 35.0e3, 10.0)
+    for dv_index in [pdyn_index]:
+        half_structure_masses = []
+        half_structure_masses_compounded = []
+        for val in vals:
+
+            dvs = copy.copy(dvs_baseline)
+
+            dvs[dv_index] = val
+
+            #dvs[dry_mass_index] = 20.e3
+            half_structure_mass = structure_mass_model.eval(dvs)
+            #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
+            # for index in range(10):
+            #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
+            #     half_structure_mass = structure_mass_model.eval(dvs)
+            #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass, dvs, regime)
+            half_structure_masses.append(half_structure_mass)
+
+            #dvs[dry_mass_index] = 20.e3
+            # half_structure_mass_compounded = 0
+            # for index in range(n_models):
+            #     area = area_models[index].eval(dvs)
+            #     thickness = thickness_models[index].eval(dvs)
+            #     if thickness < 0.0016: thickness = 0.0016
+            #     half_structure_mass_compounded += area*thickness*2780.0
+            #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
+            # for index in range(10):
+            #     dvs[dry_mass_index] = 2.0*effective_half_dry_mass
+            #     half_structure_mass_compounded = 0
+            #     for index in range(n_models):
+            #         half_structure_mass_compounded += mass_models[index].eval(dvs)
+            #     effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
+            # half_structure_masses_compounded.append(half_structure_mass_compounded)
+
+
+
+            half_structure_mass_compounded = 0
+            for index in range(n_models):
+                if isinstance(mass_models[index], float):
+                    mass = mass_models[index]
+                else:
+                    mass = mass_models[index].eval(dvs)
+                print mass
+                half_structure_mass_compounded += mass
+            half_structure_masses_compounded.append(half_structure_mass_compounded)
+
+
+        plt.plot(vals, half_structure_masses, linestyle='-', color='b') #, color='red')
+        # plt.plot(vals, half_structure_masses_compounded, linestyle='-.', color='b') #, color='red')
+
+    plt.plot(data_vals, data_pdyn, linestyle='--', color='b')
+
+    plt.legend(['pdyn model','pdyn data'])
+    fig.savefig('fig_2.png')
+    plt.close(fig)
 
     print 'FIG 3'
+
+    data_vals = numpy.linspace(-0.5, 0.5, 10.0)
+    data_dv1 = [5590.589805,5533.773873,5380.979267,5298.78498,5217.45326,5137.956884,5053.125224,4968.984914,4911.796718,4867.404202]
+    data_dv2 = [4758.01053,4856.109344,4953.734989,5037.584574,5121.434159,5247.678988,5378.20162,5499.651994,5611.571558,5718.533598]
+    data_dv3 = [4505.383296,4644.681223,4782.928996,4937.26097,5097.557156,5257.873734,5416.235764,5573.284102,5731.643236,5885.3711]
+
 
     fig = plt.figure()
     vals = numpy.linspace(-0.5, 0.5, 10.0)
@@ -353,6 +507,9 @@ def create_sol(regime = 'ON'):
 
 
 
+    colors = ['b','r','g']
+    counter = 0
+
     for dv_index in [dv1_index,dv2_index,dv3_index]:
         print dv_index
         half_structure_masses = []
@@ -370,21 +527,50 @@ def create_sol(regime = 'ON'):
             # half_intermediate_mass = intermediate_mass_model.eval(dvs)
             # half_intermediate_masses.append(half_intermediate_mass)
 
-            # half_structure_mass_compounded = 0
-            # for index in eval_indexes: # range(n_models):
-            #     area = area_models[index].eval(dvs)
+            half_structure_mass_compounded = 0
+            for index in range(n_models):
 
-            #     proba = thickness_clfs[index].predict_proba([dvs])
-            #     thickness = thickness_values[index][numpy.argmin(proba)]
-            #     if thickness:
-            #         half_structure_mass_compounded += area*thickness*2780.0
-            # half_structure_masses_compounded.append(half_structure_mass_compounded)
+                if isinstance(mass_models[index], float):
+                    mass = mass_models[index]
+                else:
+                    mass = mass_models[index].eval(dvs)
+                half_structure_mass_compounded += mass
+
+                # if isinstance(area_models[index], float):
+                #     area = area_models[index]
+                # else:
+                #     area = area_models[index].eval(dvs)
+
+                # if isinstance(thickness_models[index], float):
+                #     thickness = thickness_models[index]
+                # else:
+                #     thickness = thickness_models[index].eval(dvs)
+
+                # thickness = max(0.0016,min(0.1,thickness))
+
+                # proba = thickness_clfs[index].predict_proba([dvs])
+                # thickness = thickness_values[index][numpy.argmin(proba)]
+
+                # half_structure_mass_compounded += area*thickness*2780.0
+
+            half_structure_masses_compounded.append(half_structure_mass_compounded)
 
 
-        plt.plot(vals, half_structure_masses) #, color='red')
+        plt.plot(vals, half_structure_masses, color=colors[counter]) #, color='red')
+#        plt.plot(vals, half_structure_masses_compounded, linestyle='-.', color=colors[counter]) #, color='red')
+        counter += 1
+
         #plt.plot(vals, half_intermediate_masses) #, color='red')
         #plt.plot(vals, half_structure_masses_compounded) #, color='red')
-    plt.legend(['dv1','dv1','dv1','dv2','dv2','dv2','dv3','dv3','dv3'])
+
+
+    # plt.plot(data_vals, data_dv1, linestyle='--', color='b')
+    # plt.plot(data_vals, data_dv2, linestyle='--', color='r')
+    # plt.plot(data_vals, data_dv3, linestyle='--', color='g')
+
+
+
+    plt.legend(['dv1 model','dv2 model','dv3 model','dv1 data','dv2 data','dv3 data'])
 
 
             #effective_half_dry_mass = compute_effective_half_dry_mass(half_structure_mass_compounded, dvs, regime)
@@ -436,7 +622,7 @@ def get_clf(dat_file):
 
     clf.fit(X_train, y_train)
 
-    return clf, values
+    return clf, values, X_train, y_train
 
 def compute_effective_half_dry_mass(half_structure_mass, dvs, regime):
 

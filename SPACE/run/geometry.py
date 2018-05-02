@@ -38,29 +38,33 @@ def geometry ( config ):
     pgm.dv6 = float(konfig.DV6)
     pgm.body_flap_deflection = float(konfig.BODY_FLAP_DEF)
 
+    aero_fluid = True
+
     # FLUID
 
-    pgm.structure = False
-    pgm.tail = False
+    if aero_fluid:
 
-    wing_width_section_1_ini = 1.54
-    wing_width_section_2_ini = 2.41
-    pgm.wing_width_section_1, pgm.wing_width_section_2 = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),
-        float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF),'fluid')
+        pgm.structure = False
+        pgm.tail = False
 
-    bse = pgm.initialize()
+        wing_width_section_1_ini = 1.54
+        wing_width_section_2_ini = 2.41
+        pgm.wing_width_section_1, pgm.wing_width_section_2 = compute_wing_profiles(float(konfig.DV1),float(konfig.DV2),
+            float(konfig.DV3),float(konfig.DV4),wing_width_section_1_ini,wing_width_section_2_ini,float(konfig.ELEVON_DEF),'fluid')
 
-    pgm.comps['lwing'].set_airfoil('profile_fluid_1.dat')
-    pgm.comps['rwing'].set_airfoil('profile_fluid_37.dat')
-    pgm.comps['flap'].set_airfoil('profile_cs.dat')
-    pgm.compute_all()
-    # pgm.compute_normals()
-    # pgm.compute_all()
+        bse = pgm.initialize()
 
-    # Export Mesh
-    bse.vec['pt_str'].export_MESH(konfig.FLUID_SURFACE + '_back.mesh')
-    SPACE_MRG(konfig)
-    SPACE_SUR(konfig)
+        pgm.comps['lwing'].set_airfoil('profile_fluid_1.dat')
+        pgm.comps['rwing'].set_airfoil('profile_fluid_37.dat')
+        pgm.comps['flap'].set_airfoil('profile_cs.dat')
+        pgm.compute_all()
+        # pgm.compute_normals()
+        # pgm.compute_all()
+
+        # Export Mesh
+        bse.vec['pt_str'].export_MESH(konfig.FLUID_SURFACE + '_back.mesh')
+        SPACE_MRG(konfig)
+        SPACE_SUR(konfig)
 
     # STRUCTURE
 
@@ -111,8 +115,9 @@ def geometry ( config ):
 
     # info out
     info = spaceio.State()
-    info.FILES.FLUID_SURFACE_MESH = konfig.FLUID_SURFACE + '.mesh'
-    info.FILES.FLUID_SURFACE_BACK_MESH = konfig.FLUID_SURFACE + '_back.mesh'
+    if aero_fluid:
+        info.FILES.FLUID_SURFACE_MESH = konfig.FLUID_SURFACE + '.mesh'
+        info.FILES.FLUID_SURFACE_BACK_MESH = konfig.FLUID_SURFACE + '_back.mesh'
     if konfig.STRUCT != 'NONE':
         info.FILES.STRUCT_BDF = konfig.STRUCT + '.bdf'
         info.FILES.STRUCT_MESH = konfig.STRUCT + '.mesh'

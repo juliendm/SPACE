@@ -469,6 +469,8 @@ def geometry(config, state=None):
 
     # redundancy check
 
+    state.FILES.pop('STRUCT_BDF', None) ####################################
+
     if not state.FILES.has_key('STRUCT_BDF'):
         struct_bdf_filename = config.STRUCT + '.bdf'
         if os.path.exists(struct_bdf_filename):
@@ -510,9 +512,12 @@ def geometry(config, state=None):
                 state.update(info)
 
                 # direct files to push
-                name = info.FILES['FLUID_SURFACE_MESH']
-                push.extend([name])
-                push.append(info.FILES['FLUID_SURFACE_BACK_MESH'])
+                if 'FLUID_SURFACE_MESH' in info.FILES:
+                    # name = info.FILES['FLUID_SURFACE_MESH']
+                    # push.extend([name])
+                    push.append(info.FILES['FLUID_SURFACE_MESH'])
+                if 'FLUID_SURFACE_BACK_MESH' in info.FILES:
+                    push.append(info.FILES['FLUID_SURFACE_BACK_MESH'])
                 if 'STRUCT_SURFACE_MESH' in info.FILES:
                     push.append(info.FILES['STRUCT_SURFACE_MESH'])
                 if 'STRUCT_BDF' in info.FILES:

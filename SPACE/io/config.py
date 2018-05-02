@@ -233,7 +233,7 @@ class Config(ordered_bunch):
 
                     this_diff = np.sqrt( np.sum( (val1-val2)**2 ) )
                 
-                elif key in ['MACH_NUMBER','REYNOLDS_NUMBER','AoA','BODY_FLAP_DEF','ELEVON_DEF','DV1','DV2','DV3','DV4','DV5','DV6','DRY_MASS','FUEL_MASS','THRUST','P_DYN_INF']:
+                elif key in ['ACCELERATION_X','ACCELERATION_Y','ACCELERATION_Z','MACH_NUMBER','REYNOLDS_NUMBER','AoA','BODY_FLAP_DEF','ELEVON_DEF','DV1','DV2','DV3','DV4','DV5','DV6','DRY_MASS','FUEL_MASS','THRUST','P_DYN_INF']:
 
                     val1 = float( val1 )
                     val2 = float( val2 )

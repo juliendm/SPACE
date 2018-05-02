@@ -264,7 +264,7 @@ class Project(object):
                 
         designs = self.designs
         
-        keys_check = ['MACH_NUMBER','REYNOLDS_NUMBER','AoA','BODY_FLAP_DEF','ELEVON_DEF','DV1','DV2','DV3','DV4','DV5','DV6','DRY_MASS','FUEL_MASS','THRUST','P_DYN_INF']
+        keys_check = ['ACCELERATION_X','ACCELERATION_Y','ACCELERATION_Z','MACH_NUMBER','REYNOLDS_NUMBER','AoA','BODY_FLAP_DEF','ELEVON_DEF','DV1','DV2','DV3','DV4','DV5','DV6','FUEL_MASS','THRUST','P_DYN_INF']
 
         if not designs: 
             return [] , inf

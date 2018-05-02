@@ -32,11 +32,12 @@ from SPACE.surfpack import Surfpack
 #  Main Function Interface
 # ----------------------------------------------------------------------
 
-def process_design(regime = 'ON'):
+def process_design(regime = 'BOTH'):
 
     original = False
 
-    range_number = 300
+    number_ini = 0
+    range_number = 840
 
     if original:
        build_points_folder = 'BUILD_POINTS_ORIGINAL'
@@ -106,7 +107,7 @@ def process_design(regime = 'ON'):
     #     structure_mass_model.load_data(os.path.join('BUILD_POINTS_ORIGINAL','enriched_points_STRUCTURE_MASS.dat'))
     #     structure_area_model.load_data(os.path.join('BUILD_POINTS_ORIGINAL','enriched_points_STRUCTURE_AREA.dat'))
 
-    for dsn_index in range(range_number):
+    for dsn_index in range(number_ini,range_number):
 
         design_folder = os.path.join(designs_folder,'DSN_%03d' % (dsn_index+1))
         history_file_name = os.path.join(design_folder,'STRUCTURE/history_structure.dat')
@@ -119,28 +120,32 @@ def process_design(regime = 'ON'):
             structure_mass = history[-1,1]
             check = history[-1,2:5]
             if (check[0] < threshold) and (check[1] < threshold) and (check[2] < threshold):
-                print dsn_index+1,': Success'
-                config = spaceio.Config(os.path.join(design_folder,'config_DSN.cfg'))
-                dvs = pack_structure(config)
-                structure_mass_model.add(dvs, structure_mass)
 
-                mass_data = numpy.loadtxt(mass_file_name)
-                for index,mass_model in enumerate(mass_models):
-                    mass_model.add(dvs, mass_data[index])
+                if structure_mass > 0.0 and structure_mass < 8000.0:
 
-                thickness_data = numpy.loadtxt(thickness_file_name)
-                for index,thickness_model in enumerate(thickness_models):
-                    thickness_model.add(dvs, thickness_data[index])
+                    print dsn_index+1,': Success'
+                    config = spaceio.Config(os.path.join(design_folder,'config_DSN.cfg'))
+                    dvs = pack_structure(config)
+                    structure_mass_model.add(dvs, structure_mass)
 
-                structure_area = 0
-                for index,area_model in enumerate(area_models):
-                    area = mass_data[index]/thickness_data[index]/float(config.MATERIAL_DENSITY)
-                    area_model.add(dvs, area)
-                    structure_area += area
+                    mass_data = numpy.loadtxt(mass_file_name)
+                    for index,mass_model in enumerate(mass_models):
+                        mass_model.add(dvs, mass_data[index])
 
-                structure_area_model.add(dvs, structure_area)
+                    thickness_data = numpy.loadtxt(thickness_file_name)
+                    for index,thickness_model in enumerate(thickness_models):
+                        thickness_model.add(dvs, thickness_data[index])
 
+                    structure_area = 0
+                    for index,area_model in enumerate(area_models):
+                        area = mass_data[index]/thickness_data[index]/float(config.MATERIAL_DENSITY)
+                        area_model.add(dvs, area)
+                        structure_area += area
 
+                    structure_area_model.add(dvs, structure_area)
+
+                else:
+                    print dsn_index+1, ': Too Big or Too Small'
             else:
                 print dsn_index+1, ': Warning: ',check[0],check[1],check[2]
         else:
